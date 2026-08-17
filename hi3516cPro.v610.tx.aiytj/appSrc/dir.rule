@@ -1,0 +1,17 @@
+#****************************************************************************
+#    Copyright (C), 2008-2018, JABSCO ELECTRONIC Tech. Co., Ltd
+# 
+#    Version      : 1.0
+#    Author       : luosf
+#    Created      : 2013-03-27
+#    Description  : 
+#****************************************************************************/
+
+PRO_ROOT_DIR      = $(shell pwd)
+INSTALL_DIR       = $(PRO_ROOT_DIR)/../filesys/filesys_normal/ipc/app
+
+export PRO_ROOT_DIR 
+export INSTALL_DIR
+
+
+

@@ -1,0 +1,32 @@
+#****************************************************************************
+#    Copyright (C), 2008-2018, JABSCO ELECTRONIC Tech. Co., Ltd
+# 
+#    Version      : 1.0
+#    Author       : tangjx
+#    Created      : 2024-11-26
+#    Description  : 
+#****************************************************************************/
+
+ARM_PREFIX		= arm-v01c02-linux-musleabi-
+CC            = $(ARM_PREFIX)gcc
+C++           = $(ARM_PREFIX)g++  
+LD            = $(ARM_PREFIX)ld
+AR            = $(ARM_PREFIX)ar 
+STRIP         = $(ARM_PREFIX)strip
+OBJDUMP       = $(ARM_PREFIX)objdump
+
+export CC C++ LD AR STRIP 
+
+
+ISP_PATH    = $(shell pwd)
+LIBS_LD_CFLAGS = -fno-common -Wl,-z,relro -Wl,-z,noexecstack -Wl,-z,now,-s -fno-aggressive-loop-optimizations -mcpu=cortex-a7 -mfloat-abi=softfp -mfpu=neon-vfpv4 -ldl -rdynamic
+OT_FPGA = OT_XXXX
+LIBS_CFLAGS = -Wall -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -fsigned-char
+DFLAGS = -fstack-protector-strong -fPIC -ffunction-sections -fdata-sections -Os -mthumb -fno-aggressive-loop-optimizations -mcpu=cortex-a7 -mfloat-abi=softfp -mfpu=neon-vfpv4
+COMM_INC = -I$(ISP_PATH)/../sdklibs/include
+
+#-Isource/osal/include -Iplatform/securec/include -Isource/out/include -Isource/out/include/exp_inc
+
+export ISP_PATH LIBS_LD_CFLAGS OT_FPGA LIBS_CFLAGS DFLAGS COMM_INC
+
+

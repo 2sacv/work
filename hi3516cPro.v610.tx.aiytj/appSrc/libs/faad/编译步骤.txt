@@ -1,0 +1,32 @@
+库下载路径：https://www.linuxfromscratch.org/blfs/view/svn/multimedia/faad2.html
+
+编译步骤：
+1、解压后进入目录，执行命令 ./bootstrap
+chmod +x bootstrap
+./bootstrap
+
+2、稍等片刻既生成configure文件。
+如果提示 "./bootstrap: 12: ./bootstrap: aclocal: not found" 错误，需先安装 automake。
+如果提示 "./bootstrap: 14: ./bootstrap: libtoolize: not found" 错误，需先安装 libtool。
+
+sudo apt-get install automake
+sudo apt-get install libtool
+
+3、生成configure文件后执行该命令可生成 Makefile文件：
+./configure --host=mips-linux-uclibc CC=/opt/mips_gcc540/mips-gcc540-glibc222-64bit-r3.3.0/bin/mips-linux-uclibc-gnu-gcc CXX=/opt/mips_gcc540/mips-gcc540-glibc222-64bit-r3.3.0/bin/mips-linux-uclibc-gnu-g++  --prefix=/opt/svn/aac/faad2-2.10.1/output
+
+./configure --host=arm CC=arm-AX620E-linux-uclibcgnueabihf-gcc CXX=arm-AX620E-linux-uclibcgnueabihf-g++  --prefix=/opt/output
+
+
+./configure --host=arm CC=arm-v01c02-linux-musleabi-gcc CXX=arm-v01c02-linux-musleabi-g++  --prefix=/$PWD/output
+
+4、最后执行make和make install，编译好的文件被放到--prefix设置的目录里
+在执行make的时候，会提示frexp未定义，根据提示找到两个位置
+（1）/frontend/audio.c 481行
+（2）/aacDECdrop/audio.c 472行
+
+解决方法就是直接将这两行注释掉，因为我们设备一般用的模式是FAAD_FMT_16BIT，
+而报错的地方是FAAD_FMT_FLOAT模式相关，只要没用到FAAD_FMT_FLOAT，直接注释掉不会有影响
+
+5、拷贝/output里的/include和/lib到代码里，就可以使用了
+其中/lib下会有各种格式的库，我们只需要libfaad.a

@@ -1,0 +1,63 @@
+#****************************************************************************
+#    Copyright (C), 2008-2018, JABSCO ELECTRONIC Tech. Co., Ltd
+# 
+#    Version      : 1.0
+#    Author       : luosf
+#    Created      : 2013-03-27
+#    Description  : 
+#****************************************************************************/
+
+LIBS_ROOT				= $(PRO_ROOT_DIR)/libs 
+
+LIBS_INCDIR			=  $(shell find $(LIBS_ROOT) -name "inc")
+LIBS_INCDIR			+= $(shell find $(LIBS_ROOT) -name "*include")
+
+LIBS_FILES			=  $(shell find $(LIBS_ROOT) -name '*.a' | grep -v c_no_license)
+LIBS_INCDIR			:= $(sort $(LIBS_INCDIR))
+LIBS_INCFLAGS		:= $(foreach dir, $(LIBS_INCDIR), -I$(dir))
+
+LIBS_FILES			:= $(sort $(LIBS_FILES))
+LIBS_FILES_SHORT= $(foreach file, $(LIBS_FILES), $(notdir $(file)))
+LIBS_DIR				=  $(sort $(dir $(LIBS_FILES)))
+
+LIBS_LDFLAGS1		:= $(foreach dir, $(LIBS_DIR), -L$(dir))
+LIBS_LDFLAGS2		:= $(shell echo $(LIBS_FILES_SHORT) | sed 's/\<lib/-l/g')
+#LIBS_LDFLAGS2		:= $(shell echo $(LIBS_FILES_SHORT) | sed 's/lib/-l/g')
+LIBS_LDFLAGS2		:= $(shell echo $(LIBS_LDFLAGS2) | sed 's/\.a//g')
+#LIBS_LDFLAGS		= $(LIBS_LDFLAGS1) $(LIBS_LDFLAGS2)
+
+LIBS_FILES1          += -Xlinker "-("
+LIBS_FILES1          += $(LIBS_LDFLAGS2)
+LIBS_FILES1          += -Xlinker "-)"
+LIBS_LDFLAGS		= $(LIBS_LDFLAGS1) $(LIBS_FILES1)
+
+SDK_LIBS_ROOT		= $(PRO_ROOT_DIR)/sdklibs
+
+SDK_LIBS_INCDIR	=  $(shell find $(SDK_LIBS_ROOT) -name "src")
+SDK_LIBS_INCDIR	+= $(shell find $(SDK_LIBS_ROOT) -name "*include")
+SDK_LIBS_INCDIR	:= $(sort $(SDK_LIBS_INCDIR))
+SDK_LIBS_INCFLAGS	:= $(foreach dir, $(SDK_LIBS_INCDIR), -I$(dir))
+
+SDK_LIBS_FILES	+=  $(shell find $(SDK_LIBS_ROOT) -name '*.so' | grep -v face)
+
+SDK_LIBS_FILES	:= $(sort $(SDK_LIBS_FILES))
+SDK_LIBS_FILES_SHORT	= $(foreach file, $(SDK_LIBS_FILES), $(notdir $(file)))
+SDK_LIBS_DIR					=  $(sort $(dir $(SDK_LIBS_FILES)))
+
+SDK_LIBS_LDFLAGS1			:= $(foreach dir, $(SDK_LIBS_DIR), -L$(dir))
+SDK_LIBS_LDFLAGS2			:= $(shell echo $(SDK_LIBS_FILES_SHORT) | sed 's/lib/-l/g')
+SDK_LIBS_LDFLAGS2			:= $(shell echo $(SDK_LIBS_LDFLAGS2) | sed 's/\.so//g')
+SDK_LIBS_LDFLAGS			= $(SDK_LIBS_LDFLAGS1) $(SDK_LIBS_LDFLAGS2)
+
+#-Xlinker "-(" libs -Xlinker "-)" 可解决库相互依赖问题
+SDK_LIBS_FILES_DOT_A    += -Xlinker "-("
+SDK_LIBS_FILES_DOT_A	+= $(shell find $(SDK_LIBS_ROOT)/lib -name '*.a')
+SDK_LIBS_FILES_DOT_A    += -Xlinker "-)"
+#SDK_LIBS_FILES_DOT_A	:= $(sort $(SDK_LIBS_FILES_DOT_A))
+
+SDK_LIBS_FILES_DOT_A  += -L move_inf -L perm_inf -L personvehicleDet_inf  
+SDK_LIBS_LDFLAGS	  += $(SDK_LIBS_FILES_DOT_A)
+
+export SDK_LIBS_ROOT SDK_LIBS_FILES SDK_LIBS_INCFLAGS SDK_LIBS_LDFLAGS
+export LIBS_ROOT LIBS_FILES LIBS_INCFLAGS LIBS_LDFLAGS
+

@@ -1,0 +1,27 @@
+#****************************************************************************
+#    Copyright (C), 2008-2018, JABSCO ELECTRONIC Tech. Co., Ltd
+# 
+#    Version      : 1.0
+#    Author       : luosf
+#    Created      : 2013-03-27
+#    Description  : 
+#****************************************************************************/
+
+CC              	= $(ARM_PREFIX)gcc
+C++             	= $(ARM_PREFIX)g++
+LD              	= $(ARM_PREFIX)ld
+AR              	= $(ARM_PREFIX)ar
+STRIP           	= $(ARM_PREFIX)strip
+RANLIB  		    = $(ARM_PREFIX)ranlib
+export 						CC C++ LD AR STRIP RANLIB
+
+CFLAGS						?= -g -Wall -O2
+CFLAGS                      += -I $(PWD)/main/include
+LDFLAGS        		        ?= -lpthread -lm
+#CFLAGS						+= -EL
+export 						CFLAGS LDFLAGS 
+
+INSTALL_DIR				    = 
+export						INSTALL_DIR
+
+

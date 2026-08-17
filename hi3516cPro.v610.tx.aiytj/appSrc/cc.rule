@@ -1,0 +1,170 @@
+#****************************************************************************
+#    Copyright (C), 2008-2018, JABSCO ELECTRONIC Tech. Co., Ltd
+#
+#    Version      : 1.0
+#    Author       : luosf
+#    Created      : 2013-03-27
+#    Description  :
+#****************************************************************************/
+
+ARM_PREFIX      = arm-v01c02-linux-musleabi-
+CC            = $(ARM_PREFIX)gcc
+C++           = $(ARM_PREFIX)g++
+LD            = $(ARM_PREFIX)ld
+AR            = $(ARM_PREFIX)ar
+STRIP         = $(ARM_PREFIX)strip
+OBJDUMP       = $(ARM_PREFIX)objdump
+
+export CC C++ LD AR STRIP
+
+#Use Acl lib need -DLINUX2 -D_REENTRANT under Linux system
+#CFLAGS         = -g -Wall -O2 -ffunction-sections -DSO_REUSEADDR -DSO_REUSEPORT
+CFLAGS        = -g -Wall -ffunction-sections -fdata-sections -DSO_REUSEADDR -DSO_REUSEPORT
+CFLAGS        += -DLINUX2 -D_REENTRANT   -DENCODE_AUDIO  -DENCODE_MOTION -DENCODE_OSD -DENCODE_ISP -DENCODE_INFRARED -DENCODE_OD
+CFLAGS        += -DENCODE_OSD_ZIKU
+
+LDFLAGS       = -lpthread -lm -lcrypt -lrt -ldl -Wl,--gc-sections  -z noexecstack
+
+#-Wl -rdynamic
+MIPS_VALGRIND := 0
+ifeq ($(MIPS_VALGRIND), 1)
+CFLAGS  += -D __VALGRIND=1
+CFLAGS  += -Wno-int-to-pointer-cast # -Wno-pointer-to-int-cast
+LDFLAGS += -Wl,--wrap,malloc -Wl,--wrap,calloc -Wl,--wrap,free -Wl,--wrap,realloc -Wl,--wrap,strdup -Wl,--wrap,strndup # -rdynamic
+endif
+
+export CFLAGS LDFLAGS  ARM_PREFIX MIPS_VALGRIND
+
+#device type, BASE/ENHANCED
+DEV_TYPE      := BASE
+
+export DEV_TYPE
+
+ifeq ($(DEV_TYPE),BASE)
+CFLAGS        += -DDEV_TYPE_BASE
+else
+CFLAGS        += -DDEV_TYPE_ENHANCED
+endif
+
+# DIGITAL_ZOOM: 数字变倍
+# OPTICS_ZOOM : 光学变倍
+PRODUCT := DIGITAL_ZOOM
+CFLAGS  += -DNEW_FOLLOW
+
+ifeq ($(PRODUCT), OPTICS_ZOOM)
+CFLAGS        += -DOPTICS_ZOOM
+CFLAGS        += -DMOTION_TRIGGER_LIGHT
+endif
+
+ifeq ($(PRODUCT), DIGITAL_ZOOM)
+# 数字变倍的显示范围通过 DIGITAL_ZOOM 的值来配置，值不能为浮点数，条件宏不支持浮点数比较
+CFLAGS        += -DDIGITAL_ZOOM=12
+CFLAGS        += -DMOTION_TRIGGER_LIGHT
+endif
+
+#http support
+WITHHTTP := 
+ifeq ($(WITHHTTP), WITHHTTP)
+CFLAGS        += -DWITHHTTP=1
+endif
+
+#rtsp support
+WITHRTSP := 
+ifeq ($(WITHRTSP), WITHRTSP)
+CFLAGS        += -DWITHRTSP=1
+endif
+
+#debug info switch
+BUILDTYPES := debug
+ifeq ($(BUILDTYPES),release)
+CFLAGS        += -DBUILD_RELEASE
+else
+CFLAGS        += -DBUILD_DEBUG
+endif
+
+# platform support
+PLATFORM := GBPtP
+
+ifeq ($(PLATFORM),GBPtP)
+CFLAGS        += -DPLATFORM_TENCENT -DPLATFORM_GB -DGB28181_2022
+else ifeq ($(PLATFORM), TX)
+CFLAGS        += -DPLATFORM_TENCENT
+else ifeq ($(PLATFORM),GB)
+CFLAGS        += -DPLATFORM_GB -DGB28181_2022
+endif
+
+# with onvif
+WITH_ONVIF := 
+ifeq ($(WITH_ONVIF),NEW)
+CFLAGS        += -DWITHONVIF=1
+endif
+
+# customer customization
+ifeq ($(CUSTOMER),HBSD)
+CFLAGS        += -DCUSTOMER_HBSD
+endif
+ifeq ($(CUSTOMER),CC)
+CFLAGS        += -DCUSTOMER_CC
+endif
+
+ifeq ($(CUSTOMER),HBSD_PRO)
+CFLAGS        += -DCUSTOMER_HBSD_PRO
+endif
+ifeq ($(CUSTOMER),CC_PRO)
+CFLAGS        += -DCUSTOMER_CC_PRO
+endif
+# custom protocol
+CUST_PROT     :=
+
+ifeq ($(CUST_PROT),CUST_HB)
+CFLAGS        += -DCUST_HB
+else ifeq ($(CUST_PROT),CUST_GB)
+CFLAGS        += -DPLATFORM_GB
+else
+CFLAGS        += -DDZOOM_12X
+endif
+
+CUST_FLASH    := CUST_NAND
+ifeq ($(CUST_FLASH),CUST_NOR)
+CFLAGS        += -DCUST_NOR
+else ifeq ($(CUST_FLASH),CUST_NAND)
+CFLAGS        += -DCUST_NAND
+endif
+
+# custom lamp
+
+ifeq ($(CUST_LGTBOARD),WHITELIGHT)
+CFLAGS        += -DLGTBOARD_WHT
+else ifeq ($(CUST_LGTBOARD),DOUBLELIGHT)
+CFLAGS        += -DLGTBOARD_DBL
+else ifeq ($(CUST_LGTBOARD),INFRALIGHT)
+CFLAGS        += -DLGTBOARD_INF
+endif
+
+NETWORK             :=
+ifeq ($(NETWORK),4G)
+CFLAGS        += -DNET_4G
+else ifeq ($(NETWORK),WIFI)
+CFLAGS        += -DNET_WIFI
+else ifeq ($(NETWORK), BLE)
+CFLAGS        += -DNET_WIFI
+CFLAGS        += -DCUST_BLE
+endif
+
+CFLAGS  += -DCUST_SNAPSHOT
+CFLAGS  += -DETH_CONF
+#CFLAGS  += -DCUST_2MTO3M
+#CFLAGS  += -DIVPS2VENC_BY_UNLINKMODE
+CFLAGS  += -D __REC__=1
+CFLAGS  += $(IFLAGS)
+CFLAGS  += -DCANCLE_SD_RECORD
+CFLAGS  += -DOSD_FORMAT_YYYY_M_D
+#CFLAGS  += -DSUPPORT_CTRL_LAMP_BY_PWM
+
+#sensor driver
+SENSOR_SNS := SC235_MIPI_2M_SELECT
+SENSOR0_TYPE := SC235_MIPI_2M
+SNS_FPS := 30
+CFLAGS  += -D$(SENSOR_SNS) -DSENSOR0_TYPE=$(SENSOR0_TYPE) -DSNS_FPS=$(SNS_FPS)
+
+export CFLAGS
