@@ -1,0 +1,84 @@
+diff -uprN a/kernel/reboot.c b/kernel/reboot.c
+--- a/kernel/reboot.c	2024-07-05 17:24:23.013756501 +0800
++++ b/kernel/reboot.c	2024-07-11 16:55:56.363557002 +0800
+@@ -7,6 +7,7 @@
+ 
+ #define pr_fmt(fmt)	"reboot: " fmt
+ 
++#include <asm/io.h>
+ #include <linux/ctype.h>
+ #include <linux/export.h>
+ #include <linux/kexec.h>
+@@ -18,6 +19,17 @@
+ #include <linux/syscore_ops.h>
+ #include <linux/uaccess.h>
+ 
++#define BSP_WDT_LOCK      0x11030C00
++#define BSP_WDT_CTRL      0x11030008
++
++#define BSPWDT_UNLOCK_VAL    0x1ACCE551
++
++#define bsp_wdt_writel(v, x)   (*(volatile unsigned int *)(x) = (v))
++
++#define WDG_RST_CNT   0x11020360
++#define POR_REG0      0x11021f08
++#define POR_REG1      0x11021f0c
++
+ /*
+  * this indicates whether you can reboot with ctrl-alt-del: the default is yes
+  */
+@@ -244,6 +256,54 @@ void migrate_to_reboot_cpu(void)
+  */
+ void kernel_restart(char *cmd)
+ {
++	u32 a, b;
++
++	void *wdt_lock_addr = ioremap(BSP_WDT_LOCK, sizeof(u32));
++	if (!wdt_lock_addr) {
++		printk(KERN_ERR "Failed to map register address");
++		return;
++	}
++	void *wdt_ctrl_addr = ioremap(BSP_WDT_CTRL, sizeof(u32));
++	if (!wdt_ctrl_addr) {
++		printk(KERN_ERR "Failed to map register address");
++		return;
++	}
++
++	/* unlock watchdog registers */
++	bsp_wdt_writel(BSPWDT_UNLOCK_VAL, wdt_lock_addr);
++	/* disable watch dog reset signal and interrupt */
++	bsp_wdt_writel(0x00, wdt_ctrl_addr);
++
++	iounmap(wdt_lock_addr);
++	iounmap(wdt_ctrl_addr);
++
++	void *rst_cnt_addr = ioremap(WDG_RST_CNT, sizeof(u32));
++	if (!rst_cnt_addr) {
++		printk(KERN_ERR "Failed to map register address");
++		return;
++	}
++	void *por_reg0_addr = ioremap(POR_REG0, sizeof(u32));
++	if (!por_reg0_addr) {
++		printk(KERN_ERR "Failed to map register address");
++		return;
++	}
++	void *por_reg1_addr = ioremap(POR_REG1, sizeof(u32));
++	if (!por_reg1_addr) {
++		printk(KERN_ERR "Failed to map register address");
++		return;
++	}
++
++	a = readl(rst_cnt_addr);
++	b = readl(por_reg0_addr);
++
++	writel((u32)(a - b), por_reg1_addr);
++	if(!cmd)
++		writel(b + 1, por_reg0_addr);
++
++	iounmap(rst_cnt_addr);
++	iounmap(por_reg0_addr);
++	iounmap(por_reg1_addr);
++
+ 	kernel_restart_prepare(cmd);
+ 	migrate_to_reboot_cpu();
+ 	syscore_shutdown();

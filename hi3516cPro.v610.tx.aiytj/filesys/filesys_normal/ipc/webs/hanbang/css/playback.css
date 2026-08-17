@@ -1,0 +1,12 @@
+.lab{padding:5px;}
+tr{height: 30px;background:rgb(182,187,194);}
+#result_tab
+{
+  width:100%; color: black;height: 100%;overflow:hidden;
+}
+.div_search{background: url(/image/banner.png) repeat-x;height:30px;width:100%;line-height:30px;margin-top: 10px;}
+.div_search span{font-size: 14px;color:black;font-weight: bold;margin-left:5px;}
+.time_start{font-size: 16px;color:black; margin: 30px 0 0 30px;}
+.time_end{font-size: 16px;color:black;}
+#sliderplayback{margin: 0px 0px 0px 0px;width:100%;background: #2c2c2c; }
+#sliderplayback .ui-slider-range { background: #666; }

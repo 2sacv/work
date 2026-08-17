@@ -1,0 +1,10 @@
+[32;40m
+    cd /opt/ipc/hi3568Pro/ty42/hi3516cPro.v610.tx.aiytj/filesys/script/pack/release/tar;
+    time curl -F "file=@release/tar/HI3516CV608.ty313-ble.gen.cn.2026-08-14.141738.tgz;" 192.168.9.111/webs/updateCfg
+
+    KB10612	/opt/ipc/hi3568Pro/ty42/hi3516cPro.v610.tx.aiytj/filesys/script/pack/release/tar/HI3516CV608.ty313-ble.gen.cn.2026-08-14.141738.tgz
+    KB10612	/opt/ipc/hi3568Pro/ty42/hi3516cPro.v610.tx.aiytj/filesys/script/pack/release/tar/HI3516CV608.ty313-ble.gen.cn.2026-08-14.141738.force.tgz
+    Get release at /opt/ipc/hi3568Pro/ty42/hi3516cPro.v610.tx.aiytj/filesys/script/pack/release
+    enjoy on Hisilicon!
+    
+[0m

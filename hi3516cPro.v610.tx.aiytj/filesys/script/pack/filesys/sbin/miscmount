@@ -1,0 +1,83 @@
+#! /bin/sh
+
+fn_ubi_mount() 
+{
+	ubiattach /dev/ubi_ctrl -m 7
+    mount -t ubifs -o ro /dev/ubi1_0 /ipc 
+    if [ "$?" -eq 0 ] ; then
+        echo "--- mount ipc ubi succ! ---"
+    else
+        echo "--- mount ipc ubi fail! ---"
+    fi
+	
+	ubiattach /dev/ubi_ctrl -m 8
+    mount -t ubifs -o ro /dev/ubi2_0 /soclib 
+    if [ "$?" -eq 0 ] ; then
+        echo "--- mount soclib ubi succ! ---"
+    else
+        echo "--- mount soclib ubi fail! ---"
+    fi
+
+	ubiattach /dev/ubi_ctrl -m 9
+    mount -t ubifs /dev/ubi3_0 /algo 
+    if [ "$?" -eq 0 ] ; then
+        echo "--- mount soclib ubi succ! ---"
+    else
+        echo "--- mount soclib ubi fail! ---"
+    fi
+	ubiattach /dev/ubi_ctrl -m 10
+    mount -t ubifs -o ro /dev/ubi4_0 /font 
+    if [ "$?" -eq 0 ] ; then
+        echo "--- mount soclib ubi succ! ---"
+    else
+        echo "--- mount soclib ubi fail! ---"
+    fi
+
+	ubiattach /dev/ubi_ctrl -m 11
+    mount -t ubifs  /dev/ubi5_0 /opt
+    if [ "$?" -eq 0 ] ; then
+        echo "--- mount opt ubi succ! ---"
+    else 
+        echo "--- mount opt ubi fail! ---"
+    fi
+}
+
+fn_jffs2_mount() 
+{
+    mount -t squashfs /dev/mtdblock4 /ipc
+    if [ "$?" -eq 0 ] ; then
+        echo "--- mount squashfs succ! ---"
+    else
+        echo "--- mount squashfs fail! ---"
+    fi
+
+    mount -t squashfs /dev/mtdblock5 /algo
+    if [ "$?" -eq 0 ] ; then
+        echo "--- mount squashfs succ! ---"
+    else
+        echo "--- mount squashfs fail! ---"
+    fi
+
+    mount -t jffs2 -o rw /dev/mtdblock6 /opt 
+    if [ "$?" -eq 0 ] ; then
+        echo "--- mount jffs2 succ! ---"
+    else
+        echo "--- mount jffs2 fail! ---"
+    fi
+}
+
+fn_main() 
+{
+    if grep -q 'root=/dev/nfs' /proc/cmdline; then
+        echo "run on nfs, no ubi mount!"
+        return 0
+    fi
+
+    if grep -q 'flash=SF' /proc/cmdline; then
+        fn_jffs2_mount
+    else
+        fn_ubi_mount
+    fi
+}
+
+fn_main $@

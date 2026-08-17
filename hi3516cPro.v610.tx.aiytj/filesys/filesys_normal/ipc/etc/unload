@@ -1,0 +1,72 @@
+#! /bin/sh
+
+fn_video_env()
+{
+    # sensor name
+    DRIVER_ROOT=/drivers
+    DRIVER_IPC=/ipc/drv
+    echo 1 >/proc/jz/sinfo/info
+    SENSORTYPE=`cat /proc/jz/sinfo/info`
+    SENSORTYPE=${SENSORTYPE#*:}
+    MODULE_DIR=$(uname -r)
+
+    param_interface=
+    case "$SENSORTYPE" in
+        "imx307")
+        sensor_file=sensor_imx327_t40.ko
+            ;;
+        "H42")
+            sensor_file=sensor_jxh42
+            ;;
+        "H61")
+            sensor_file=sensor_jxh61
+            ;;
+        "PS1211")
+            sensor_file=sensor_ps1211
+            ;;
+        "SC1035")
+            sensor_file=sensor_sc1035
+            ;;
+        "SC2035")
+            sensor_file=sensor_sc2035
+			
+            ;;
+        "SC1045")
+            sensor_file=sensor_sc1045
+            ;;
+        "SC1245A")
+            sensor_file=sensor_sc1245a
+            ;;
+        "JXF22")
+            sensor_file=sensor_jxf22.ko
+	    ;;
+        "SC2232")
+            sensor_file=sensor_sc2232
+            ;;
+        "SC2230")
+            sensor_file=sensor_sc2230
+            ;;
+        *)
+            echo "Invalid argument for video frontend: $SENSORTYPE"
+            sensor_file=sensor_jxh42
+            ;;
+    esac
+}
+
+fn_main()
+{    
+        mkdir -p /tmp/modules/${MODULE_DIR}
+        mkdir -p /lib/modules
+        cd /lib/modules/
+        ln -s /tmp/modules/*
+        rmmod -f gd25q
+        rmmod -f gpio
+        rmmod -f i2c
+        rmmod -f reg
+        rmmod -f sinfo
+        rmmod -f $sensor_file
+        rmmod -f tx-isp-t40
+}
+
+fn_video_env $@
+fn_main $@

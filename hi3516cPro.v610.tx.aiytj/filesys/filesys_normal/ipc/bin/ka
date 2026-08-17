@@ -1,0 +1,16 @@
+#!/bin/sh
+
+fn_main()
+{
+    if [ "${1}" = '-f' ]; then
+        cd /ipc/etc
+        ps | grep "auto_run.sh" | awk 'NR==1{print $1;}' | xargs kill -9
+        ps | grep [f]eed || /ipc/bin/feedwdt &
+    fi
+
+    cd /ipc/app && killall -9 jco_*
+    
+    return $?
+}
+
+fn_main $@

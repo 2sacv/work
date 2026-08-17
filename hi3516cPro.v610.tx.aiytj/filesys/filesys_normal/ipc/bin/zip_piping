@@ -1,0 +1,59 @@
+#! /bin/sh
+
+fn_main()
+{
+    # avoid lots of exception printf of Kernel
+    echo 3 > /proc/sys/kernel/printk
+    top -b -n 1 > /tmp/temptop
+    cat /tmp/temptop >> /tmp/messages
+    cat /tmp/temptop
+    # clean
+    echo _______________________ coredump _______________________
+    echo 3 > /proc/sys/vm/drop_caches; free
+    echo _______________________ 4K* 2^11 _______________________
+    cat  /proc/buddyinfo
+    #mountpoint /mnt && /ipc/bin/logcat -d -f /mnt/logcat
+
+    set -x
+    # select
+    if df | grep -q /dev/mmcblk0; then
+        dir_mnt=`df | awk '/mmcblk0/{print $6;exit}'`
+        ts_core=core.`sed 's/://g' /ipc/etc/timestamp`.gz
+        RBT_CORE=$dir_mnt/${ts_core}
+        test -e ${RBT_CORE}.1 && mv ${RBT_CORE}.1 ${RBT_CORE}.2
+        test -e ${RBT_CORE}   && mv ${RBT_CORE}   ${RBT_CORE}.1
+        echo "do ${RBT_CORE}"
+    else
+        if [ -f /tmp/tag.test_ver ]; then
+            CORE=/tmp/core.gz
+        else
+            echo "SEGV to auto_run.sh [toggle tar]"
+            return
+        fi
+    fi
+
+    ps | awk '/[a]uto_run.sh/{print $1}' | while read PID; do kill -9 $PID; done
+    /ipc/bin/feedwdt&
+    echo "core dumping @`date +%F.%T`"; rm -f /opt/log/coredump.log
+
+    # dump mmc, reboot
+    if  [ -n "${RBT_CORE}" ]; then
+        cat /proc/$$/fd/0 | /bin/gzip > ${RBT_CORE} || cat /proc/$$/fd/0 | /bin/gzip > /tmp/core.gz
+        sync; sleep 1; sync; sleep 1
+        logger "SEGV save syslog success" && /ipc/bin/toggle tar && sleep .5
+        echo 1 > /sys/class/mmc_host/mmc0/reboot
+    # dump tmp, hang up
+    elif [ -n "${CORE}" ]; then
+        cat /proc/$$/fd/0 | /bin/gzip > ${CORE}
+        sync; sleep 1; sync; sleep 1
+        echo "coredump over, hang up!"
+        reboot -f
+    else
+        echo "SEGV with no dump, auto_run.sh died, check code"
+        logger "SEGV save syslog success" && /ipc/bin/toggle tar && sleep .5
+        echo 1 > /sys/class/mmc_host/mmc0/reboot
+        reboot -f
+    fi
+}
+
+fn_main > /dev/console 2>&1

@@ -1,0 +1,119 @@
+#! /bin/sh
+
+trap 'cap_ctrl_c' INT
+cap_ctrl_c() {
+    echo 'Ctrl+C is captured'
+    [ -n "${pid}" ] && kill -9 $pid
+    [ -n "${pnc}" ] && kill -9 $pnc
+    [ -n "${pdd}" ] && kill -9 $pdd
+    [ -n "$FIFO"  ] && rm -f "${FIFO}"
+}
+
+if [ ${1:-8} = h ]; then
+    echo "
+    band4g               # use production.hcciot.com:88
+    band4g ip     <PORT> # use production.hcciot.com:[86,87,88]
+    band4g k             # kill nc, band4g
+    ______
+    ff4g                 # auto port, 后台 band4g 15 sec, 上行限速 104KB/s
+    m94g                 # auto port, 后台 band4g 60 sec, 上行限速 104KB/s
+    bb4g                 # auto port, 后台 band4g 60 sec, 上行限速 500KB/s
+    jsdbg 4              # 执行 m94g
+    jsdbg 5              # 查看 bb4g,m94g,ff4g 的日志
+
+    Env variable:
+    BS: ${BS:-512K}      # bolck size
+    NR: ${NR:-40}        # package num
+    BSS: 64              # KBps = BSS*1.6 = 104KB default
+    SEC: 15              # last 15 sec when ff4g, 60 bb4g
+    "
+    exit
+fi  
+
+if [ ${1:-8} = k ]; then
+    ps | grep "[5]88" | awk '{print $1}' | xargs kill -9 2>/dev/null
+    ps | grep "[b]and4g" | awk '{print $1}' | xargs kill -9 2>/dev/null
+    exit
+fi  
+
+sta=`awk '{print $1}' /proc/uptime`
+
+HOST=`echo $1 | sed 's/\bip\b//g'` # ip default production
+HOST=${HOST:-production.hcciot.com}
+PORT=588${2:-88}
+
+[ -n "${D}" ] && set -x
+
+if [ -z "${FF}" ]; then
+    TMOUT=300
+    # ChinaMobile 100KBps spend 200 seconds, LIMIT use 300
+    NR=${NR:-40} BS=${BS:-512K} IF=/dev/zero
+    dd if=$IF  bs=${BS} count=$NR | nc ${HOST} ${PORT} &
+         
+    ps -ef >& /dev/null && export OPT=ax;
+    pid=`ps $OPT | awk '/[d]d if/{printf ("%s", $1); exit}'`;           \
+    i=0; test -n "$pid" &&                                              \
+    while :; do                                                         \
+        kill -0 $pid 2>/dev/null || { echo __done__ ; break; };\
+        let i=i+1; echo $i ; sleep 1;                          \
+        kill -USR1 $pid 2>/dev/null; [ "${i}" -ge ${TMOUT} ] && break;  \
+    done
+
+    end=`awk '{print $1}' /proc/uptime`
+    let s_take="${end%.*}-${sta%.*}"
+
+    echo "$HOST@$PORT ${BS}*${NR} spend ${s_take}s @`date +%F.%T`"
+else
+    let SZ_PIPE=80*1024
+    [ -n "${BB}" ] && let SZ_PIPE=512*1024
+    echo ${SZ_PIPE} > /proc/sys/fs/pipe-max-size # 80KB, 256KB@ cat /proc/sys/net/ipv4/tcp_wmem
+    TMOUT=${SEC:-15}
+    BSS=${BSS:-64}
+    all_sta=$sta
+    all_cnt=0 all_ok=0 ok=0 cnt=0
+    > ${OUT:=/tmp/ff4g.log}
+
+    fn_dd() {
+        sleep .5
+        while :; do
+            let cnt++; let all_cnt++
+            timeout 2 dd if=/dev/zero bs=${BSS}K count=1 2>/dev/null && let ok++ && let all_ok++
+            sleep .6;
+            {
+            if [ $cnt = 3 ]; then
+                end=`awk '{print $1}' /proc/uptime`
+                let dataK=${BSS}*$ok
+                speed=`echo | awk -vsta=$sta -vend=$end -vkB=$dataK '{printf "%.2f", kB/(end-sta)}'`
+                let s_take="${end%.*}-${all_sta%.*}"
+                printf "%2d/${TMOUT} @succ[$ok/3] speed: ${speed}KB/s\n" $s_take
+                ok=0 cnt=0 sta=$end
+
+                if [ "${s_take}" -ge ${TMOUT} ]; then
+                    echo "dd get end of sec[${TMOUT}]"
+                    exit
+                fi
+            fi
+            } >> ${OUT} 2>&1
+        done
+    }
+
+    FIFO=/tmp/fifo.$$
+    mknod $FIFO p
+
+    fn_dd > $FIFO &
+    pdd=$!;
+
+    {
+    date +%F.%T
+    PORT=`nc $HOST 58890`
+    nc $HOST $PORT < $FIFO &
+    pnc=$!; echo pid nc ${pnc}, pid dd ${pdd} ${HOST}:${PORT}
+    while :; do
+        [ "${nr:=0}" -gt $TMOUT ] && { echo __all done__ ; break; };
+        kill -0 $pnc 2>/dev/null  || { echo __nc  done__ ; break; };
+        kill -0 $pdd 2>/dev/null  || { echo __dd  done__ ; break; };
+        let nr=nr+1; printf "%2d\n" $nr ; sleep 1;
+    done
+    } >> ${OUT} 2>&1
+    rm -f ${FIFO}; kill -9 $pnc $pdd 2>/dev/null
+fi

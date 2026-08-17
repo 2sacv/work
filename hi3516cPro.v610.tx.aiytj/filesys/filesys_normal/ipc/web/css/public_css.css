@@ -1,0 +1,48 @@
+span{
+  color: white;
+  font-size:14px;
+}
+
+select {
+  margin-left: 15px;
+  width: 150px;
+  box-shadow: rgba(255, 255, 255, 0.1) 0 1px 0, rgba(0, 0, 0, 0.8) 0 1px 7px 0px inset;
+  background: #121212 !important;
+  border: 1px solid black !important;
+  outline: none;
+  color: #EAEAE4;
+}
+
+.sysinput {
+  margin-left: 15px;
+  box-shadow: rgba(255, 255, 255, 0.1) 0 1px 0, rgba(0, 0, 0, 0.8) 0 1px 7px 0px inset;
+  background: #121212 !important;
+  border: 1px solid black !important;
+  outline: none;
+  color: #EAEAE4;
+  width: 150px;
+}
+
+.index_btn{
+    width: 90%;height: 36px;margin: 10px 10px 0px 10px;font-size: 18px;text-align: center;
+    background: url("../image/bg_tab_btn_bottom.png");
+}
+.index_btn:hover,
+.index_btn:focus,
+.index_btn:active{
+  background: #0d75a7;
+}
+#top_div button{ 
+  margin:4px 0 0 0px; width:130px; height: 40px; font-size:18px;
+  background: #3C3D3D; border-left: 2px solid #4B4B47;
+}
+.centent {
+  border: 1px solid #121212;
+  width: 600px;
+  height: 250px;
+  margin: 0 15px;
+  margin-top: 10px;
+  background-color: #121212;
+  color: #666;
+  resize: none;
+}

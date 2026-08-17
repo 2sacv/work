@@ -1,0 +1,197 @@
+#! /bin/sh
+
+alias set_argv_toggle='set --                       \
+    "tar            [x|pkg]      # roll && tar or extract when [x]" \
+    "mmc            [x|log]      # xtar && tar" \
+    "______         _            # " \
+    "code           [1001]       # toggle stdout -> /tmp/messages.dot" \
+'
+
+export PATH=/tmp/bin:/ipc/bin:$PATH
+export LD_LIBRARY_PATH=/ipc/lib:/lib:$LD_LIBRARY_PATH
+
+fn_echo_clor() { TEXT="$@"; echo "$FG: ${TEXT}" > /dev/stdout ;}
+fn_echo_fail() { FG=fail fn_echo_clor "$@" ;}   # red
+fn_echo_succ() { FG=succ fn_echo_clor "$@" ;}   # green
+fn_echo_warn() { FG=warn fn_echo_clor "$@" ;}   # yellow
+
+xt_ret()
+{
+    [ "${1}" = "0" ] && return 0
+    echo "${2}"
+    return 1
+}
+
+fn_exe_usage()
+{
+     echo -e "\nUsage:
+     ${0##*/} {id|key} [value:0]   # exec key command
+     "
+}
+
+fn_execute()
+{
+    argv9="$@"
+    argv1=$1
+    case $argv1 in
+    ''|l|-l|--list)
+        fn_exe_usage
+        [ "${lzbox}" = tog ] && set_argv_toggle
+
+        local i=0
+        for argv; do
+            printf " %-4s%s\n" $i "$argv"
+            let i++
+        done
+        echo
+        ;;
+    [0-9]|[0-9][0-9])
+        [ "${lzbox}" = tog ] && set_argv_toggle
+
+        [ $argv1 -ge ${#} ] && \
+        fn_execute --list && fn_echo_fail "  -- fn_execute $1 too big --" && return
+
+        i=0
+        while [ $i -lt $argv1 ]; do shift; let i++; done
+
+        set -- ${1}
+        cmd=$1
+
+        set -- ${argv9}
+        shift
+        fn_${cmd} "${@}"
+        ;;
+    *)
+        [ "${lzbox}" = tog ] && set_argv_toggle
+        local i=0
+        for argv; do
+            if echo $argv | grep -q "^$argv1" ; then
+                set -- $argv
+                cmd=$1
+                set -- ${argv9}
+                shift
+                fn_${cmd} "${@}"
+                return $?            # avoid _fn_exe_usage_
+            fi
+        done
+        fn_exe_usage
+        ;;
+    esac
+}
+
+#
+# from old to new
+#
+fn_tar()
+{
+    if [ "${1}" = x ]; then
+        cd /opt/log
+        [ -f msg0.tgz ] && tar -zxf msg0.tgz -C /var && echo 'enjoy /var/msg0'
+        [ -f kmsg.tgz ] && tar -zxf kmsg.tgz -C /var && echo 'enjoy /var/kmsg'
+        cd /tmp; f=messages.0
+        [ -f ${f}.tgz ] && tar -zxf ${f}.tgz -C /var && echo 'enjoy /var/${f}'
+        echo "tar x over"; return
+    fi
+
+    now=`date +%s`
+    let now=now+20 # start up spend
+    echo "date @$now" > /opt/conf/reboot.epoch; sync
+
+    if [ "${1}" = pkg ]; then
+        tar -zcvf /tmp/pkg.tgz \
+            /tmp/alarmlog   \
+            /tmp/applog     \
+            /tmp/messages*  \
+            /tmp/4g         \
+            /opt/log        \
+            /opt/conf/config.xml
+        echo "tar pkg over"; return
+    fi
+
+    msg0='/tmp/msg0'
+
+    # OLD compatibility
+    cd /opt/log
+    for f in messages.reboot messages.2 messages.1 messages kmsg; do
+        [ -e "${f}" ] && echo __tag $f >> ${msg0} && cat $f >> $msg0 && rm -f $f
+    done
+
+    [ -e msg0.tgz ] && tar -zxf msg0.tgz -C /var/ && \
+        echo __tag $f >> $msg0 && cat /var/msg0 >> $msg0
+
+    f='messages.reboot'
+    [ -e $f ] && tar -zxf ${f}.tgz ${f} && rm -f ${f}
+
+    # /tmp
+    cd /tmp
+    [ -e messages0.tgz ] && tar -zxf messages.0.tgz 
+    for f in messages.head messages.0; do
+        [ -e "${f}" ] && echo __tag $f >> ${msg0} && cat $f >> $msg0 && rm -f $f
+    done
+    logger -t update "clean messages ..."
+    f=messages; echo __tag $f >> ${msg0} && cat $f >> $msg0 && > $f
+    logger -t update "clean messages end $?"
+
+    # dec
+    sed -i 's/ //g' $msg0
+    bytes=`stat -c "%s" $msg0`
+    KK=$((50*1024))
+    if [ "${bytes}" -gt $KK ]; then
+        # dont use 'dd bs=1', 1M/40sec and 100% CPU
+        tail -c $KK $msg0 > ${msg0}.bak ; sync
+        mv ${msg0}.bak ${msg0}          ; sync
+    fi
+
+    # tar
+    tar -zcf /opt/log/msg0.tgz msg0
+    cd /tmp; dmesg > kmsg; tar -zcf /opt/log/kmsg.tgz kmsg
+    echo "do tar over@msg0"; return
+}
+
+fn_mmc()
+{
+    tar0='/opt/log/mmc.tgz'
+    mmc0='/tmp/mmc.log'
+    mmcA='/var/mmc.log'
+
+    if [ "${1}" = x ]; then
+        [ -f ${tar0} ] && tar -zxf ${tar0} -C /var && echo "enjoy ${mmcA}" && exit
+    fi
+
+    # touch $mmcA
+    [ -e ${tar0} ] && tar -zxf ${tar0} -C /var/
+    echo ________tag NEW mmc >> $mmcA && cat ${mmc0} >> $mmcA
+
+    # dec to 300KBytes
+    sed -i 's/ //g' $mmcA
+    bytes=`stat -c "%s" $mmcA`
+    KK=200000
+    if [ "${bytes}" -gt $KK ]; then
+        # dont use 'dd bs=1', 1M/40sec and 100% CPU
+        tail -c $KK $mmcA > ${mmcA}.bak ; sync
+        mv ${mmcA}.bak ${mmcA}          ; sync
+    fi
+
+    # tar
+    cd /var/; tar -zcf ${tar0} ${mmcA##*/}; rm -f ${mmcA}
+    echo "do tar over @fn_mmc"; return
+}
+
+fn_code()
+{
+    if glog l | grep -q 'dbg=0'; then
+        echo _______ dbg onn  messages.dot
+        glog dbg on
+    else
+        echo _______ dbg off  stdout
+        glog dbg off
+    fi
+}
+
+fn_toggle()
+{
+    lzbox=tog
+    fn_execute "$@"
+}
+
+fn_${0##*/} $*

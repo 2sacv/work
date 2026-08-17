@@ -1,0 +1,550 @@
+#! /bin/sh
+
+. /ipc/bin/io.rc
+
+alias set_argv_4g='set --     \
+    "udhcpc {[usb0]|eth0} [on][MTU]   # " \
+    "addr_sync                        # NT35 only" \
+    "loop  {k|a|s|e}                  # kill, alive, stat, exit_succ" \
+    "acc    0 1 2                     # accelerate, 1X 2X 4X" \
+    "LTE {stop|start|restart|at_init} # drv_reset|no_dhcp_start|at_init|hwstat_ok" \
+    "env_init                         # " \
+    "autocall                         # pdp_active" \
+    "fly_reset                        # " \
+    "drv_reset                        # with ko rmmod insmod" \
+    "fun_reset                        # cfun=0 cfun=1" \
+    "pwr [on]|off                     # testing" \
+    "iccid_imei_imsi                  # refresh iccid" \
+    "detect_sim1                      # sim1" \
+    "detect_sim2                      # sim2"  \
+    "sim_ready                        # 1,work:0,crash" \
+    "sig                              # csq insr rssi rsrp signal Detect" \
+    "tac    [l|c]                     # list or check" \
+'
+
+alias set_argv_at='set --     \
+    "__________________________________ # public"\
+    "AT                                 # AT"\
+    "AT+CSQ                             # signal"\
+    "AT+LSIMDET=1,1                     # sim 卡热插拔检查"\
+    "ATE0                               # 禁用回显"\
+    "AT&W                               # 保存配置"\
+    "AT+CPIN?                           # 检查 sim 卡"\
+    "AT+COCSIM=0                        # 失败软重启"\
+    "AT+CEREG?                          # +CEREG: 0,1 已附着网络"\
+    "AT+CGDCONT?                        # 因为是自动，不需要手动执行设置 APN"\
+    "AT+CGDCONT=5,%IP%,%ctnet%          # Define APN"\
+    "AT+CGDCONT=5,%IP%                  # Define APN"\
+    "AT+CFUN?                           # 0 是飞行模式"\
+    "AT+CFUN=1                          # "\
+    "AT+CGACT?                          # PDP上下文激活。5,1 表示 cid=5 已经被设置过"\
+    "AT+CGACT=1,5                       # "\
+    "AT+SYSNV=0,%usbmode%               # check"\
+    "AT+SYSNV=1,%usbmode%,5             # ECM"\
+    "AT+TRB                             # reboot 4G module"\
+    "AT+CGPADDR                         # 从基站分配到的 IP"\
+    "AT+TUEINFO                         # User End info"\
+    "AT+NETMSG                          # same as TUEINFO, but ugly"\
+    "__________________________________ # EC800E"\
+    "AT+QCFG=%BAND%                     # 查询 0x1e200000095=TDD:34.38.39.40.41 + FDD:1.3.5.8"\
+    "AT+QCFG=%BAND%,0,95                # 锁定 FDD:1.3.5.8"\
+    "AT+QCFG=%BAND%,0,1                 # 锁定     FDD:1"\
+    "AT+QCFG=%BAND%,0,4                 # 锁定     FDD:3 常用"\
+    "AT+QCFG=%BAND%,0,10                # 锁定     FDD:5"\
+    "AT+QCFG=%BAND%,0,80                # 锁定     FDD:8 常用"\
+    "AT+QCFG=%BAND%,0,1e200000000       # 锁定 TDD:34.38.39.40.41"\
+    "AT+QCFG=%BAND%,0,80                # 锁定     TDD:8 常用"\
+    "AT+QCFG=%BAND%,0,7FFFFFFFFFFFFFFF  # 解锁"\
+    "AT+QENG=%servingcell%              # 小区信息: <RSRQ>,<RSRP>,<RSSI>,<SINR>,<srxlev>"\
+    "AT+QENG=%neighbourcell%            # 邻区信息: <EARFCN>,<PCI>,<RSRQ>,<RSRP>,"\
+    "AT+ECFREQ=2,<PCI>,<EARFCN>         # 2=锁定, 物理小区标识, 绝对射频信道号"\
+    "AT+ECFREQ=0                        # 0=解锁"\
+    "___________________________________# YM310-X09C"\
+    "AT*BANDIND?                        # 查询当前工作频段 <band>,<Act> *BANDIND: 0, 41, 7"\
+    "AT+ECBAND=1,3,5,8,34,38,39,40,41   # 设置频段信息"\
+    "AT^SYSINFO                         # ^SYSINFO:<srv_status>,<srv_domain>,<roam_status>,<sys_mode>,<sim_state>,<sys_submode>"\
+    "AT+CCED=0,1                        # 小区信息: MCC,MNC,imsi,roamingFlag,bandInfo,bandwidth,dlEarfcn,cellid,rsrp,rsrq,tac,SrxLev,pcid"\
+    "AT+CCED=0,2                        # 邻区信息: MCC,MNC,frequency,cellid,rsrp,rsrq,tac,SrxLev,pcid"\
+    "__________________________________ # NT35"\
+    "AT+VERCTRL?                        # "\
+    "AT+VERCTRL=0,1                     # 上电自动激活PDP上下文"\
+    "__________________________________ # NT26E"\
+    "AT+ECNETDEVCTL?                    # "\
+    "AT+ECNETDEVCTL=3,5,1               # 上电自动激活PDP上下文"\
+    "AT+ECPCFG?                         # check"\
+    "AT+ECPCFG=%usbNet%,1               # ECM"\
+    "AT+LRST                            # reboot 4G module"\
+'
+alias set_argv_ping='set --     \
+    "www.aliyun.com                                          # 阿里云官网"\
+    "production.hcciot.com                                   # 捷高服务器"\
+    "iotx-vision-streaming-rtmp-vpc-sh.aliyuncs.com          # 实时直播"\
+    "iotx-vision-vod-rtmp-vpc-sh.aliyuncs.com                # 卡录像点播"\
+    "link-vision-picture-sh.oss-cn-shanghai.aliyuncs.com     # 图片"\
+    "public.iot-as-mqtt.cn-shanghai.aliyuncs.com             # 物联长连接（公共实例）"\
+    "iotx-ota.oss-cn-shanghai.aliyuncs.com                   # OTA"\
+    "iot-auth-global.aliyuncs.com                            # 全球统一激活"\
+    "iotx-vision-p2p-vpc-sh.aliyuncs.com                     # P2P服务"\
+'
+
+export LD_LIBRARY_PATH=/ipc/lib:/lib:$LD_LIBRARY_PATH
+
+
+fn_echo_clor() { TEXT="$@"; NL=${NL:-"\n"}; echo -ne "\033[${FG};${BG}m${TEXT}${NL}\033[0m" ;}
+fn_echo_fail() { FG=31 BG=40 fn_echo_clor $@ ;}   # red
+fn_echo_succ() { FG=32 BG=40 fn_echo_clor $@ ;}   # green
+fn_echo_warn() { FG=33 BG=40 fn_echo_clor $@ ;}   # yellow
+
+xt_ret()
+{
+    [ "${1}" = "0" ] && return 0
+    fn_echo_fail "${2}"
+    return 1
+}
+
+xt_succ()
+{
+    [ "${1}" = "0" ] && fn_echo_succ "__4g_stat succ: ${2}" || fn_echo_fail "__4g_stat fail: ${2}"
+    return $1
+}
+
+fn_exe_usage()
+{
+    echo "Usage:
+     ${0##*/} l    [id]                 # list AT commands, or exec AT cmds
+     ${0##*/} ping [id] [nr_pkg] [SEC]  # ping HOST with nr_pkg and timeout SEC
+     ${0##*/} {id|func} [para...]       # exec func
+    "
+}
+
+fn_execute()
+{
+    argv9="$@"
+    argv1=$1
+    case $argv1 in
+    ping|fn_ping)
+        if [ -z "${2}" ]; then
+            set_argv_ping
+            local i=0
+            for argv; do
+                printf " %-4s%s\n" $i "$argv"
+                let i++
+            done
+        else
+            case $at_cmd in
+            [0-9]|[0-9][0-9])
+                set_argv_ping
+                [ $at_cmd -ge ${#} ] && \
+                fn_echo_fail "  -- fn_execute [$at_cmd] too big --" && return
+
+                i=0
+                while [ $i -lt $at_cmd ]; do shift; let i++; done
+                set -- ${1}
+                cmd=$1
+                ping -c${pkg_count:-3} -w${4:-10} $cmd
+                set -- ${argv9}
+                shift
+                #echo do ${cmd} "${@}"
+                ;;
+            *)
+                fn_exe_usage; exit
+                ;;
+            esac
+        fi
+        ;;
+    l)
+        if [ -z "${2}" ]; then
+            set_argv_at
+            local i=0
+            for argv; do
+                printf " %-4s%s\n" $i "$argv"
+                let i++
+            done | sed 's/%/"/g'
+            return;
+        else
+            case $at_cmd in
+            [0-9]|[0-9][0-9])
+                set_argv_at
+                [ $at_cmd -ge ${#} ] && \
+                fn_echo_fail "  -- fn_execute [$at_cmd] too big --" && return
+
+                i=0
+                while [ $i -lt $at_cmd ]; do shift; let i++; done
+
+                set -- ${1}
+                cmd="${1//%/\"}"
+
+                set -- ${argv9}
+                shift
+                AT $cmd
+                ;;
+            *)
+                echo "5g l {0-99}"
+                ;;
+            esac
+        fi
+        ;;
+    '')
+        fn_exe_usage
+        set_argv_4g
+        [ "${lzb}" = at ] && set_argv_at
+
+        local i=0
+        for argv; do
+            printf " %-4s%s\n" $i "$argv"
+            let i++
+        done
+        echo
+        ;;
+    [0-9]|[0-9][0-9])
+        set_argv_4g
+        [ "${lzb}" = at ] && set_argv_at
+
+        [ $argv1 -ge ${#} ] && \
+        fn_execute --list && fn_echo_fail "  -- fn_execute $1 too big --" && return
+
+        i=0
+        while [ $i -lt $argv1 ]; do shift; let i++; done
+
+        set -- ${1}
+        cmd=$1
+
+        set -- ${argv9}
+        shift
+        fn_${cmd} "${@}"
+        ;;
+    *)
+        set_argv_4g
+        [ "${lzb}" = at ] && set_argv_at
+
+        local i=0
+        for argv; do
+            if echo $argv | grep -q "^$argv1\>" ; then
+                set -- $argv
+                cmd=$1
+                set -- ${argv9}
+                shift
+                fn_${cmd} "${@}"
+                return $?            # avoid _fn_exe_usage_
+            fi
+        done
+        fn_exe_usage
+        ;;
+    esac
+}
+
+fn_udhcpc() {
+    ps | awk "/[u]dhcpc.*${1:-usb0}/{print \$1}" |\
+    while read PID; do kill -USR2 $PID; kill -9 $PID; done;
+
+    if [ "${2:-on}" = on ]; then
+        # mtu read once
+        if [ ! -e /tmp/4g/mtu ]; then
+            mtu=`xml_shuttle -c r -k /cfg/eth/mtu /opt/conf/config.xml | awk '{print $3}'`
+            [ "${mtu:=1450}" -lt 1450 ] || mtu=1450
+            echo -n ${mtu} > /tmp/4g/mtu
+        else
+            mtu=`cat /tmp/4g/mtu`
+        fi
+        logger -t _4g_ mtu:${mtu}
+        ifconfig  ${1:-usb0} mtu ${mtu} up
+        udhcpc -i ${1:-usb0} -R -b -T2 -A3 -p /tmp/pid.dhcp4g
+    fi
+}
+
+# arg1 AT-cmd
+# arg2 expect
+# arg3 try-times, default 4
+fn_at_expect()
+{
+    i=0
+    while [ $i -lt ${3:-4} ] ; do
+        AT $1 t
+        grep -q "$2" ${TEE} && return 0
+        let i=i+1
+        sleep .5
+    done
+    return 1
+}
+
+# arg1 AT-cmd
+# arg2 expect-not, default fail
+# arg3 try-times, default 4
+fn_at2()
+{
+    i=0
+    while [ $i -lt ${3:-4} ] ; do
+        AT ${1:-AT} t
+        grep -q -v "${2:-fail}" ${TEE} && break
+        let i=i+1
+    done
+}
+
+fn_AT3_okey()
+{
+    i=0
+    while [ $i -lt ${1:-3} ] ; do
+        AT AT t
+        grep -q OK ${TEE}
+        [ "${?}" -eq 0 ] && return 0
+        let i=i+1
+        sleep $i
+    done
+
+    echo "4g do AT3 fail"; return 1
+}
+
+fn_cfun_on()
+{
+    AT AT+CFUN? t
+    grep -q 'CFUN..1' ${TEE}
+    if [ "${?}" -ne 0 ]; then
+        AT AT+CFUN=1; sleep 3;
+    fi
+}
+
+fn_cfun_off()
+{
+    AT AT+CFUN=0; sleep 1;
+    AT AT+CFUN? t
+    grep -q 'CFUN..0' ${TEE}
+    if [ "${?}" -ne 0 ]; then
+        AT AT+CFUN=0; sleep 1;
+    fi  
+}
+
+# R1=`cat /sys/class/net/usb0/statistics/rx_bytes`
+# T1=`cat /sys/class/net/usb0/statistics/tx_bytes`
+
+fn_acc()
+{
+    case ${1:-0} in
+    2) echo 4X ;;
+    1) echo 2X ;;
+    0) echo 1X ;;
+    *) echo Invalid; return ;;
+    esac
+
+    echo ${1:-0} > /opt/conf/4g/acc_shift
+    toggle run on 4
+}
+
+fn_tac()
+{
+    case ${1:-l} in
+    c)  if [ ! -f /tmp/4g/imei ]; then
+            echo Error: 4g IMEI crashed; return
+        fi
+        grep -q -f /ipc/bin/TAC /tmp/4g/imei
+        if [ "${?}" = 0 ]; then
+            echo '/tmp/4g/imei' in whitelist
+        else
+            echo '/tmp/4g/imei' in BLACKLIST
+        fi
+        ;;
+    *)  cat /ipc/bin/TAC ;;
+    esac
+}
+
+fn_loop()
+{
+    case $1 in
+    a|alive)
+        rm -f /tmp/4g/kill_q /tmp/4g/kill_a
+        echo "4g loop alive"
+        ;;
+    e|exit_succ)
+        touch ${local_rc}
+        chmod +x ${local_rc}
+        sed -i '/toggle.run.on.3/d' ${local_rc}
+        if [ "${2:-1}" = 1 ]; then
+            cmd='toggle run on 3'
+            echo "{ sleep 30; ${cmd} ;}&" >> ${local_rc}
+            eval ${cmd}
+            fn_echo_succ "pause 4G stratage succ, enjoy it!"
+        fi
+        ;;
+    k|kill)
+        i=0
+        rm -f /tmp/4g/kill_a
+        touch /tmp/4g/kill_q
+        while [ -z "$2" ] && [ $i -lt 15 ]; do
+            if [ -f "/tmp/4g/kill_a" ]; then
+                echo "4g loop kill succ"
+                return
+            fi
+            echo "wait loop ack $i"
+            let i++
+            sleep 1
+        done
+        echo "kill 4g loop __timeout__"
+        ;;
+    s|stat)
+        if [ -f "/tmp/4g/kill_a" ]; then
+            echo "4g loop killed"
+        else
+            echo "4g loop alive"
+        fi
+        ;;
+    *)
+        echo "loop {kill|alive|stat}"
+        ;;
+    esac
+}
+
+# 3 个层次：app, drv, pwr, 
+# app-restart, 最上层的 reset 包含下一层及更下一层
+# drv_reset  , 包含 pwr_reset
+# pwr_reset 
+fn_LTE()
+{
+    case ${1:-stat} in
+    restart)
+        fn_LTE stop
+        fn_drv_reset
+        xt_ret $? "$1" || return $?; echo sleep 3; sleep 3
+        fn_LTE start
+        ;;
+    drv_reset)
+        fn_drv_reset
+        xt_ret $? "$1" || return $?
+        ;;
+    stop)
+        # 防止内置卡不存在，或损坏的情况下，外置卡无流量，无法再使用外置卡
+        rm -f /tmp/4g/*
+        ;;
+    no_dhcp_start)
+        fn_env_init
+        fn_autocall
+        touch /tmp/4g/no_dhcp_start_done
+        ;;
+    at_init)
+        fn_at_init
+        ;;
+    start)
+        fn_env_init
+        xt_ret $? "env" || return $?
+        fn_autocall
+        xt_ret $? "call" || return $?
+        fn_udhcpc
+        xt_ret $? "udhcpc" || return $?
+        ;;
+  hwstat_ok)
+        fn_hwstat_ok
+        xt_succ $? "hwstat_ok" || return $?
+        ;;
+    stat)
+        lsmod | grep -q rndis_host
+        xt_succ $? "DRIVER"
+
+        ifconfig usb0 up; sleep 1; ifconfig | grep -q usb0
+        xt_succ $? "if usb0"
+
+        fn_AT3_okey
+        xt_succ $? "AT"
+
+        AT ATI
+
+        AT AT+CPIN? t; grep -q READY ${TEE}
+        xt_succ $? "SIMCARD"
+
+        AT 'AT+ECPCFG="usbNet",1' t;grep -q usbNet..1 ${TEE}
+        xt_succ $? "ECM"
+
+        AT AT+CFUN? t; grep -q 'CFUN:.1' ${TEE}
+        xt_succ $? "CFUN"
+
+        AT AT+CGDCONT? t; grep -q '+CGDCONT: 5,' ${TEE}
+        xt_succ $? "APN"
+        #+CGDCONT: 0,"IP","ctnet","10.7.122.248"
+        #+CGDCONT: 5,"IP","ctnet","10.7.122.248",0,0
+
+        # 以获取到 IP 为成功标志 +CGPADDR: 5,"10.1.55.225"
+        # 大概率失败
+        false && {
+            AT AT+CGPADDR t
+            nr=`grep CGPADDR: ${TEE} | wc -c`
+            [ "${nr}" -lt 20 ]
+            xt_succ $? "CGPADDR"
+        }
+
+        fn_udhcpc
+        ;;
+    *)
+        echo "Usage: LTE {restart|start|stat}"
+        echo UNKONW command $1
+        ;;
+    esac
+}
+
+fn_4g()
+{
+    TEE=/tmp/tee
+    local_rc='/opt/etc/local.rc'
+
+    f_idven='/opt/conf/4g/idVendor'
+    f_inside_sim='/tmp/4g/inside_sim'
+    f_atcmd='/tmp/4g/f_atcmd'
+    f_hwstat_ok='/tmp/4g/hwstat_ok'
+    f_ready='/tmp/4g/ready'
+    f_esim_iccid='/tmp/4g/esim_iccid'
+    f_iccid='/tmp/4g/iccid'
+    f_imei='/tmp/4g/imei'
+    f_imsi='/tmp/4g/imsi'   # CIMI, 随运营商而变
+    f_ATI='/tmp/4g/ATI'
+
+    # 19d1:0001 Air780E
+    USB_IDPRODUCT="/sys/bus/usb/devices/1-1/idProduct"
+    # vendor
+    USB_IDVENDOR="/sys/bus/usb/devices/1-1/idVendor"
+
+    mkdir -p /tmp/4g
+
+    if [ -e "${f_atcmd}" ]; then
+        atcmd=`cat ${f_atcmd}`
+        atcmd=${atcmd:-at.800e}
+    else
+        # 避免 4g 模块探测不到时，加载驱动错乱
+        vendor=`cat ${USB_IDVENDOR}`
+        id_ven=`cat ${f_idven}`
+        if [ -z "${vendor}" ] && [ -n "${id_ven}" ]; then
+            echo "____ not exist ${USB_IDVENDOR}"
+            vendor=$id_ven
+        elif [ -n "${vendor}" ] && [ "${vendor}" != "${id_ven}" ]; then
+            echo ${vendor} > ${f_idven}
+        fi
+
+        f_vendor='/tmp/4g/ota_vendor'
+
+        case ${vendor} in
+        1782) atcmd=at.nt35; echo -n LD >$f_vendor; echo -n ${atcmd} > ${f_atcmd} ;;
+        3505) atcmd=at.nt26; echo -n L6 >$f_vendor; echo -n ${atcmd} > ${f_atcmd} ;;
+        2c7c) atcmd=at.800e; echo -n EC >$f_vendor; echo -n ${atcmd} > ${f_atcmd} ;;
+        17d1) logger -t "17d1 USBBOOT"; sleep 16; 
+              atcmd=at.800e; echo -n EC >$f_vendor; echo -n ${atcmd} > ${f_atcmd} ;;
+        19d1) atcmd=at.x09;  echo -n YG >$f_vendor; echo -n ${atcmd} > ${f_atcmd} ;;
+           *) atcmd=at.nt26; fn_echo_fail "________ unknow 4g chip $vendor _____" ;;
+        esac
+    fi
+
+    fn_echo_succ "source /ipc/bin/${atcmd} $@"
+    . /ipc/bin/${atcmd}
+
+    [ "${1}" = l ] && { lzb=at; at_cmd=$2 ;}
+    [ "${1}" = ping ] && { at_cmd=$2 pkg_count=$3 ;}
+    fn_execute "$@"
+}
+
+list_usb="
+| NO. | Comp.  | Name       | vendor:prod | Intface | sim |
+| :-- | :---   | :------    | :------     | :--     | :-- |
+| 1   |        | jzzz-hub   | 1d6b:0002   |         |     |
+| 2   | Lierda | NT35-8COM  | 1782:4d10   | Option  | 1   |
+| 3   | Lierda | NT35-RNDIS | 1782:4d11   | Option  | 1   |
+| 4   | Lierda | NT26       | 3505:0001   | ACM     | 2   |
+| 5   | Yiyuan | EC800E     | 2c7c:0903   | Option  | 2   |
+| 6   | Hezhou | Air780E    | 19d1:0001   | ACM     | Dig |
+| 7   | Yuge   | YM310.X09C | 19d1:1003   | ACM     | 2   |
+"
+
+fn_4g $@

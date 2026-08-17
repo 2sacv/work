@@ -1,0 +1,14 @@
+.imageSlider
+{ 
+  height:13px; 
+  width:100%;
+  background-image:url("/image/slider_bar.png"); 
+  background-repeat:repeat-x; 
+}
+.imageBar   
+{    
+  height:13px; 
+  width:10px; 
+  background-image:url("/image/slider_speed.png"); 
+  background-repeat:no-repeat;
+}

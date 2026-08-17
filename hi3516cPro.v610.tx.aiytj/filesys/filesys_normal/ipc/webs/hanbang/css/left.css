@@ -1,0 +1,40 @@
+#menuTreeDiv{border: 1px solid #666666;;height:100%;width:99%;float:left;}
+
+#menuTreeDiv img{vertical-align: middle;}
+#menuTreeDiv span{margin-left:5px;height:25px;line-height: 25px;vertical-align: middle;}
+.firstclass{
+	margin:0px; 
+	padding:0px; 
+	cursor:pointer;
+	height:26px; 
+	color:black;
+}
+.subfirstclass{
+	padding-left:20px;
+	padding-top:3px;
+	vertical-align:middle;
+}
+.subfirstclass img {
+ vertical-align:middle;
+}
+.subfirstclass span{
+ display:inline-block;
+ vertical-align:middle;
+}
+
+.secondclass{
+	margin:0px; 
+	padding:0px;
+}
+.secondclassdiv{
+	margin:0px; 
+	padding:0px; 
+	cursor:pointer;
+	height:26px; 
+	color:black;
+}
+.subsecondclass{
+	padding-left:30px;
+	padding-top:2px;
+}
+.displaynone{display:none;}

@@ -1,0 +1,10 @@
+1 /cfg/videoEncode/enclist/encode/codec       7
+1 /cfg/videoEncode/enclist/encode/vencsize    5
+1 /cfg/videoEncode/enclist/encode/bps         512
+1 /cfg/videoEncode/enclist/encode/fps         12
+1 /cfg/videoEncode/enclist/encode/gop         36
+2 /cfg/videoEncode/enclist/encode/codec       7
+2 /cfg/videoEncode/enclist/encode/vencsize    11
+2 /cfg/videoEncode/enclist/encode/bps         512
+2 /cfg/videoEncode/enclist/encode/fps         15
+2 /cfg/videoEncode/enclist/encode/gop         45

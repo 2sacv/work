@@ -1,0 +1,187 @@
+#! /bin/sh
+
+export PATH=/bin:/usr/bin:/sbin:/usr/sbin
+
+wlan_gw="/tmp/wlan_gw"
+eth0_gw="/tmp/eth0_gw"
+ROUTE=route
+LOGGER=logger
+RESOLV_CONF='/etc/resolv.conf'
+
+xt_ret() 
+{
+    [ "${1}" = "0" ] && return 0
+    echo "${2}"
+    $LOGGER -t networking "${2}"
+    return 1
+}
+
+fn_update_static_dns()
+{
+    if [ "$ethdhcp" = 0 ]; then
+        # attention: below are tables
+        {
+        echo nameserver 223.5.5.5
+        echo nameserver ${1}
+        echo nameserver 8.8.8.8
+        } > ${RESOLV_CONF}
+    fi
+}
+
+fn_update_wifi() 
+{
+    /ipc/bin/ccli wificfg -act list | \
+        sed -e '/^pid:/d' -e 's/^.Success.//' -e 's/;/\n/g' -e 's///g' -e '/^[\r\n]*$/d' > ${netconf}
+    . ${netconf}
+    ethip=$ip
+    ethmask=$mask
+    ethgw=$gw
+    ethdhcp=$dhcp
+    ethmac=$apmacaddr
+	if [ "${nic}" != "wlan0" ] && [ "${nic}" != "ra0" ] ; then
+        return 0;
+	fi
+
+    local i=
+    for i in $@; do
+        case $i in
+        'ip')
+            PIDFILE=${pid_of_dhcpc_wlan} fn_update_ip
+            ;;
+        'dns')
+            fn_update_static_dns ${dns}
+            ;;
+        *)
+            ;;
+        esac
+    done
+    return 0 
+}
+
+fn_use_static_ip()
+{
+    device=${nic}
+    $LOGGER -t network "ifconfig $device $ethip netmask $ethmask"
+    ifconfig $device $ethip netmask $ethmask
+    echo $ethgw > $eth0_gw
+    
+    while $ROUTE del default dev ${device}; do :; done 2>/dev/null
+
+    $ROUTE add default gw ${ethgw} dev ${device} metric 0
+
+	eth0_route=$(cat $eth0_gw)
+    wlan_route=$(cat $wlan_gw)
+    wlan_route=${wlan_route:-${eth0_route}}
+    ifconfig eth0|grep -q RUNNING && eth_running=true || eth_running=false
+
+	echo "----networking-----------${wlan_route}"
+	echo "----networking-----------${eth0_route}"
+
+    if ${eth_running}; then
+        if [ "${wlan_route}" = "${eth0_route}" ]; then
+            while $ROUTE del default gw 0.0.0.0 dev wlan0;do :;done
+        else
+            while $ROUTE del default gw 0.0.0.0 dev wlan0;do :;done  
+            $ROUTE add default gw ${wlan_route} dev wlan0 metric 1
+        fi
+    else
+        while $ROUTE del default gw 0.0.0.0 dev eth0; do :;done
+    fi
+}
+
+fn_update_ip() 
+{
+    ps | awk "/[u]dhcpc.*${nic}/{print \$1}" |\
+    while read PID; do kill -USR2 $PID; sleep 1; kill -9 $PID; done;
+
+    #设置 MTU 值
+    if [ -n "${ethmtu}" ]; then
+        $LOGGER -t networking "mtu $ethmtu"
+        /sbin/ifconfig $nic mtu $ethmtu up
+    fi
+
+    if [ "$nic" = "wlan0" ] ; then
+        udhcpc -i ${nic} -p ${PIDFILE:-$pid_of_dhcpc_eth0} -R -b -T2 -A3
+    elif [ "$ethdhcp" = 1 ] ; then
+		udhcpc -i ${nic} -p ${PIDFILE:-$pid_of_dhcpc_eth0} -R -b -T2 -A3 -x hostname:${dhcpname:-JCO}
+	else
+        fn_use_static_ip
+    fi
+}
+
+fn_update_eth() 
+{
+    if grep -q 'root=/dev/nfs' /proc/cmdline; then
+        bootip=`ifconfig eth0 | grep "inet addr" | cut -d : -f 2 | cut -d ' ' -f 1`
+        bootgw=${bootip%.*}.1
+        while $ROUTE del default dev eth0; do :; done 2>/dev/null
+        $ROUTE add default gw ${bootgw} dev eth0 metric 0
+        echo $ethgw>$eth0_gw
+        wlan_route=$(cat $wlan_gw)
+        eth0_route=$(cat $eth0_gw)
+        if [ "${wlan_route}" = "${eth0_route}" ];then
+            while $ROUTE del default gw 0.0.0.0 dev wlan0; do :; done
+        fi
+        $LOGGER "run on nfs, use IP of u-boot parameter"
+        return 0
+    fi
+
+    /ipc/bin/ccli ethcfg -act list | \
+        sed -e '/^pid:/d' -e 's/^.Success.//' -e 's/;/\n/g' -e 's///g' -e '/^[\r\n]*$/d' > ${netconf}
+    . ${netconf} 2>/dev/null
+    [ "${nic}" = "$intf" ]
+    xt_ret $? "ethcfg $nic" || return $?
+    [ "${enable:-1}" = 1 ]
+    xt_ret $? "ethcfg disabled" || return $?
+
+    local i=
+    for i in $@; do
+        case $i in
+        'ip') PIDFILE=${pid_of_dhcpc_eth0} fn_update_ip ;;
+       'dns') fn_update_static_dns ${dns}              ;;
+        *) ;;
+        esac
+    done
+
+    return 0 
+}
+
+fn_main() 
+{
+    touch $wlan_gw
+    touch $eth0_gw
+
+    test -f /tmp/tag.test_net && set -x
+    $LOGGER -t network "networking $@"
+    dir_network='/var/network'
+    netconf="${dir_network}/eth0.conf"
+    pid_of_dhcpc_eth0="${dir_network}/dhcpc.pid.eth0"
+    pid_of_dhcpc_wlan="${dir_network}/dhcpc.pid.wlan"
+
+    case $1 in
+    'init')
+        intf=${2:-eth0}
+        mkdir -p ${dir_network}
+        if test -d /sys/class/net/eth0/ && ifconfig eth0 | grep -q "RUNNING"; then
+            echo 'eth RUNNING'
+            fn_update_eth  'ip' 'dns'
+        else
+            echo 'not RUNNING, skip eth config'
+        fi
+        ;;
+    'eth0'|'usb0')
+        intf=${1}
+        fn_update_eth $2
+        ;;
+    'wifi')
+        #fn_update_wifi $2
+        ;;
+    *)
+        ;;
+    esac
+
+    return 0
+}
+
+fn_main $@ > /dev/console 2>&1
+

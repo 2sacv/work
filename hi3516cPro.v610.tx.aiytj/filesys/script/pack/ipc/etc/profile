@@ -1,0 +1,109 @@
+#! /bin/sh
+
+# alias
+alias       ..='cd ..'
+alias        x='chmod +x'
+alias        f='find . -name'
+alias       ls='/bin/ls --color'
+alias       la='/bin/ls -a'
+alias       ll='/bin/ls -l'
+alias       rr='rm -rf'
+alias      swd='pwd >   /opt/etc/.swd'
+alias      gwd='cd `cat /opt/etc/.swd`'
+alias    xgrep="find . -name '*' -type f | xargs grep "
+alias   psgrep='ps | grep '
+alias      psj='ps | grep jco_server'
+alias       io='fn_gpio'
+alias       .b='cd /tmp/bin'
+alias     .sd='touch /tmp/no_autommc'
+alias   reboot='reboot -f'
+
+# env variable
+
+export PATH=/tmp/bin:/ipc/bin:$PATH
+export LD_LIBRARY_PATH=/ipc/lib:/lib:$LD_LIBRARY_PATH
+export PS1='\u@\h:\w\$ '
+export TERM=vt100
+export HOME=/opt/etc
+export CDPATH=.:/opt:/ipc
+
+if [ -z '/opt/etc/TZ' ]; then
+    export TZ=$(cat /opt/etc/TZ)
+else
+    export TZ='CST-08:00'
+fi
+
+sdboot() {
+    [ -z "${1}" ] && cp /ipc/etc/sdboot /opt/etc || rm -f /opt/etc/sdboot; sync
+}
+
+pskill() {   
+    # jco normal exit, serv kill exit
+    if echo "$1" | grep -q jco; then
+        ps | grep "[a]uto_run.sh"     | awk '{print $1}' | while read PID; do kill -9 $PID; done;
+        ccli sysctrl -act set -cmd 1
+    else
+        ps | grep "$1" | grep -v grep | awk '{print $1}' | while read PID; do kill -9 $PID; done;
+    fi
+}
+
+hd() {
+    if [ -n "$1" ]; then
+         ccli humandetectcfg -act list
+         ccli followcfg -act list
+    elif ccli humandetectcfg -act list | grep -q '\<enable=1'; then
+        ccli humandetectcfg -act set -enable 0 -screenenable 0
+        ccli followcfg -act set -enable 0
+    else
+        ccli humandetectcfg -act set -enable 1 -screenenable 1
+        ccli followcfg -act set -enable 1
+    fi
+}
+
+go() { # recommand [go o]
+    if [ -n "${1}" ]; then
+        echo "continue j c o _ s e r v e r"
+        grun audio 9
+    else
+        ka -f
+        if test -f /mnt/jco_server; then
+            /mnt/jco_server&
+        else
+            echo '/mnt/jco_server __not exist__'; sleep 3
+            /ipc/app/jco_server&
+        fi
+    fi
+}
+
+h() {
+    echo "
+    f       # find
+    .b      # cd WGET bin
+    .sd     # forbid auto_mount.sh
+    go      # start /mnt/jco_server
+    hd      # toggle humandetect
+    sdboot
+    reboot  # tar log b4 reboot
+    rr      # rm -rf
+    xgrep
+    psgrep
+    psj     # ps jco_server
+    "
+}
+
+# arg1 AT-cmd
+# arg2 expect-not, default fail
+# arg3 try-times, default 3
+at2()
+{
+    i=0
+    TEE=/tmp/tee
+    while [ $i -lt ${3:-3} ] ; do
+        AT ${1:-AT} t
+        grep -q -v "${2:-fail}" ${TEE} && break
+        let i=i+1
+    done
+}
+
+. /ipc/bin/io.rc
+hostname ty313-ble

@@ -1,0 +1,23 @@
+.sTime{
+  height: 184px;
+  width: 575px;
+  margin-bottom: 15px;
+  /*margin:  15px 0 15px 10%;*/
+}
+
+ .m_btn{
+    width: 120px;
+    border: 1px solid black;
+    margin: 0 8px 0 8px;
+ }
+#m_btn_tab tr td{text-align: center; margin-left:10px;}
+#m_slider{width: 360px;}
+#m_save{ margin-left: 62%;}
+#select_prompt{margin: 10px 0 0 10px;}
+#snap_picture,#snap_save{margin-left: 50px;}
+#video_save,#nfs_save,#samba_save{width: 60px;}
+#refresh{margin-left: 20px; width: 80px;}
+#time_interval,#pre_open{margin-left: 25px;}
+#start_video,#http_download,#ftp_download,#video_save,#video_status,#snap_save{width: 120px;}
+#video_status_lab{color: red;margin: 5px 0 0 20px;float: left;}
+#pre_enb{float: right;}

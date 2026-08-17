@@ -1,0 +1,42 @@
+#! /bin/sh
+
+fn_usage()
+{
+    echo -e "\nUsage:
+    glog                    # list Mod help
+    glog {l|list}           # list Mod value
+    glog Mod                # Mod 状态反转
+    glog Mod {on|off}       # turn on, turn off
+    glog Mod {p1|p0}        # turn on, turn off @prefix.rc
+    "
+}
+
+fn_main()
+{
+    case $1 in
+    l|list)
+        ccli glog -act list | grep '=' | sed 's/^/    /g'
+        return
+        ;;
+    '')
+        fn_usage
+        grep -A32 -i "struct Mod" /ipc/bin/.c/g_sys.h | grep -B32 -i "sMod;"
+        return
+        ;;
+    esac
+
+    case $2 in
+   on|1) newv=1 ;;
+  off|0) newv=0 ;;
+     p1) newv=1 ; echo "export dbg_$1=1" >> "/opt/etc/prefix.rc"; sync ;;
+     p0) newv=0 ; sed -i "/dbg_$1=/d" "/opt/etc/prefix.rc"      ; sync ;;
+  tog|*)
+        ccli glog -act list | grep -q "${1}=0" && newv=1 || newv=0
+        ;;
+    esac
+
+    echo glog set $1 ${newv:=1}
+    ccli glog -act set -$1 ${newv}
+}
+
+fn_main $@

@@ -1,0 +1,589 @@
+#! /bin/sh
+
+. /ipc/bin/io.rc
+alias set_argv_wifi='set --     \
+    "udhcpc    [off]         # " \
+    "loop      {k|a|s}       # kill, alive, stat" \
+    "acc       0 1 2         # accelerate, 1X 2X 4X" \
+    "ap        on|off|reset  # ls|bc|conf " \
+    "sta       on|off|reset  # rm|step|scan|freq|stat|conf|zconf2[ff]|zconf" \
+    "scan_list               # scan wifi list" \
+    "drv       on|off|reset  # with ko rmmod insmod" \
+    "pwr       [on]|off      # testing" \
+'
+
+alias set_argv_ping='set --     \
+    "www.aliyun.com                                       # 阿里云官网"\
+    "production.hcciot.com                                # 捷高服务器"\
+    "iotx-vision-streaming-rtmp-vpc-sh.aliyuncs.com       # 实时直播"\
+    "iotx-vision-vod-rtmp-vpc-sh.aliyuncs.com             # 卡录像点播"\
+    "link-vision-picture-sh.oss-cn-shanghai.aliyuncs.com  # 图片"\
+    "public.iot-as-mqtt.cn-shanghai.aliyuncs.com          # 物联长连接（公共实例）"\
+    "iotx-ota.oss-cn-shanghai.aliyuncs.com                # OTA"\
+    "iot-auth-global.aliyuncs.com                         # 全球统一激活"\
+    "iotx-vision-p2p-vpc-sh.aliyuncs.com                  # P2P服务"\
+'
+
+fn_echo_clor() { TEXT="$@"; NL=${NL:-"\n"}; echo -ne "\033[${FG};${BG}m${TEXT}${NL}\033[0m" ;}
+fn_echo_fail() { FG=31 BG=40 fn_echo_clor $@ ;}   # red
+fn_echo_succ() { FG=32 BG=40 fn_echo_clor $@ ;}   # green
+fn_echo_warn() { FG=33 BG=40 fn_echo_clor $@ ;}   # yellow
+
+xt_ret()
+{
+    [ "${1}" = "0" ] && return 0
+    fn_echo_fail "${2}"
+    return 1
+}
+
+fn_exe_usage()
+{
+    echo "Usage:
+     ${0##*/} l                         # list wifi config
+     ${0##*/} ping [id] [nr_pkg] [SEC]  # ping HOST with nr_pkg and timeout SEC
+     ${0##*/} {id|func} [para...]       # exec func
+    "
+}
+
+fn_do_weight()
+{
+    sum=0
+    cn=0
+    set -- ${_w}
+    for c in ${_c}; do
+        let cn++
+        eval "w=\${$cn}"
+        for i in ${chns}; do
+            if [ ${c} -eq "${i}" ]; then
+                let sum=sum+${w}
+            fi
+        done
+    done
+    echo -e "${freq}\t${sum}"
+}
+
+# 1. 以频道距离为权重weight(距离越近，干扰越大，权重越大)，
+# 2. 为每个通道进行加权计算sum(weight)，
+# 3. sum(weight)最小者，即最佳通道
+fn_bestchn()
+{
+    act=$1
+    tmpf='/tmp/freq'
+    wbcf='/tmp/wbcf'
+    ifconfig wlan0 up
+    iwlist wlan0 scan | sed -n -e '/Frequency:/p' -e '/Quality/p' | sed 'N;s/)\n/ /' | sort -k4 -g > ${tmpf}
+    #ed -i 's/ dBm//g' ${tmpf}      # ingenic
+    #ed -i 's# /100##g' ${tmpf}     # mstar
+    test -s ${tmpf}
+    xt_ret $? "" || return $?
+
+    chns="`awk '{print $4}' ${tmpf}`"
+    #et -A dbms `awk -F'=' '{print $3}' ${tmpf}`
+    #et -A wgts `awk -F'=' '{print $3}' ${tmpf}`
+
+    _c="1 2 3 4 5"
+    _w="5 4 3 2 1"
+    freq=1 fn_do_weight  > ${wbcf}
+
+    _c="1 2 3 4 5 6"
+    _w="4 5 4 3 2 1"
+    freq=2 fn_do_weight  >> ${wbcf}
+
+    _c="1 2 3 4 5 6 7"
+    _w="3 4 5 4 3 2 1"
+    freq=3  fn_do_weight  >> ${wbcf}
+
+    _c="1 2 3 4 5 6 7 8"
+    _w="2 3 4 5 4 3 2 1"
+    freq=4  fn_do_weight  >> ${wbcf}
+
+    _c="1 2 3 4 5 6 7 8 9"
+    _w="1 2 3 4 5 4 3 2 1"
+    freq=5  fn_do_weight  >> ${wbcf}
+
+    _c="2 3 4 5 6 7 8 9 10"
+    _w="1 2 3 4 5 4 3 2 1"
+    freq=6  fn_do_weight  >> ${wbcf}
+
+    _c="3 4 5 6 7 8 9 10 11"
+    _w="1 2 3 4 5 4 3 2 1"
+    freq=7  fn_do_weight  >> ${wbcf}
+
+    _c="4 5 6 7 8 9 10 11 12"
+    _w="1 2 3 4 5 4 3 2 1"
+    freq=8  fn_do_weight  >> ${wbcf}
+
+    _c="5 6 7 8 9 10 11 12 13"
+    _w="1 2 3 4 5 4 3 2 1"
+    freq=9  fn_do_weight  >> ${wbcf}
+
+    _c="6 7 8 9 10 11 12 13"
+    _w="1 2 3 4 5  4 3 2 1"
+    freq=10 fn_do_weight  >> ${wbcf}
+
+    _c="7 8 9 10 11 12 13"
+    _w="1 2 3 4  5  4 3 2"
+    freq=11 fn_do_weight  >> ${wbcf}
+
+#   _c="8 9 10 11 12 13"
+#   _w="1 2 3  4  5  4"
+#   freq=12 fn_do_weight  >> ${wbcf}
+
+#   _c="9 10 11 12 13"
+#   _w="1 2  3  4  5"
+#   freq=13 fn_do_weight  >> ${wbcf}
+
+    if [ "${act}" = bc ]; then
+        sort -g -k2 ${wbcf} | awk 'NR==1 {print $1}'
+    else
+        sort -g -k2 ${wbcf}
+    fi
+}
+
+fn_new_supplicant_conf()
+{
+test -f /opt/etc/iw.conf && cp /opt/etc/iw.conf ${SSID_CFG} && return
+echo \
+"network={
+    ssid=\"TP-LINK_FFJCO.zhangj${1}\"
+    key_mgmt=WPA-PSK
+    scan_ssid=1
+    psk=\"jabsco123456\"
+}" > ${SSID_CFG}
+}
+
+fn_scan_list()
+{
+    # 剔除前置空格
+    # 提取 'ESSID|level'
+    # 组合两行为一行
+    iwlist wlan0 scanning |grep -E 'ESSID|level' | sed -e 's/^  *//g' -e 's/Quality.*level=//g' | sed 's#/.*##g' > /tmp/wlist.tmp
+    while read; do
+        echo "$REPLY"  | grep ESSID && continue
+        level=`echo $REPLY | awk '{print $1}'`
+        let sig0=$level+100
+        let sig=$sig0+$sig0/2
+        [ ${sig:-0} -gt 100 ] && sig=100
+        [ ${sig:-0} -lt 0 ] && sig=0
+        echo $sig
+    done < /tmp/wlist.tmp > /tmp/wlist.out
+    sed 'N;s/\n/,/' /tmp/wlist.out | grep -v '""' | grep -v "AICAM" |  awk -F ',' '{print $2 $1}' | sed -e 's/ESSID:"//g'  -e 's/"/=/g' -e 's/$/=4=3;/g' | head -29 > /tmp/wlist.ripe
+    myssid=`iwconfig wlan0 | grep -E 'ESSID:"' | sed -e 's/.*ESSID:"//g' -e 's/".*//g'`
+    if ! grep "^$myssid=" /tmp/wlist.ripe && [ -n "$myssid" ]; then
+        lvl=`iwconfig wlan0 | grep -E level | sed -e "s/.*Signal level=//g" -e 's#/.*##g' | awk '{print $1}'`
+        let sig0=$lvl+100
+        let sig=$sig0+$sig0/2
+        [ ${sig:-0} -gt 100 ] && sig=100
+        [ ${sig:-0} -lt 0 ] && sig=0
+        echo "$myssid=$sig=4=3;" >> /tmp/wlist.ripe
+    fi
+    sort -t= -k2 -g -r /tmp/wlist.ripe | awk '{printf "%s" $0}' > /tmp/wlist.yammy
+}
+
+fn_pwr()
+{
+    case ${1:-on} in
+    off) fn_gpio wifi off; sleep 3 ;;
+    on)  fn_gpio wifi on;  sleep 3 ;;
+    *)   echo invalid [$1] ;;
+    esac
+}
+
+fn_rmmod()
+{
+    ps | awk "/[u]dhcpc.*wlan0/{print \$1}" | while read PID; do kill -USR2 $PID; kill -9 $PID; done
+    echo "rmmod wifi driver"
+    # remove -> can't unload 'plat_soc': Device or resource busy
+    echo 1 > /sys/bus/usb/devices/1-1/remove 
+    sleep 3; ps | grep '[u]sb_wifi_rx_dat' && sleep 2
+    if [ "${drv_name}" == "ws73" ]; then
+        lsmod | grep -q ble_soc  && rmmod -f ble_soc
+        lsmod | grep -q wifi_soc && rmmod -f wifi_soc
+        lsmod | grep -q plat_soc && rmmod -f plat_soc
+    else
+        lsmod | grep -q ${drv_name} && rmmod -f ${drv_name} || rmmod -f ${drv_name}
+    fi
+
+    echo "stop wifi succ"
+}
+
+fn_insmod()
+{
+    /ipc/drv/airlink/wifi_load.sh
+}
+
+fn_drv()
+{
+    case $1 in
+     on) fn_insmod ;;
+    off) fn_rmmod  ;;
+  reset)
+        fn_ap off
+        fn_sta off
+        fn_rmmod
+        fn_insmod
+        ;;
+    *) 
+        echo "Usage:
+        wifi drv {on|off|reset}  # with ko
+        "
+        ;;
+    esac
+}
+
+fn_sta()
+{
+    SUPPLICANT_OK_CONF="/opt/conf/airlink/supplicantOK.conf"
+    TMP_SUPPLICANT_CONF="/tmp/supplicant.conf"
+    WIFI_GUN_CFG="/opt/conf/supplicant.conf"
+
+    if test -f ${TMP_SUPPLICANT_CONF}; then
+        SSID_CFG=${TMP_SUPPLICANT_CONF}
+    else
+        SSID_CFG=${SUPPLICANT_OK_CONF}
+    fi
+
+    case $1 in
+    on)
+        ifconfig ${WLAN} up
+        echo wpa_supplicant -Dnl80211 -B -i ${WLAN} -C ${WLAN0_SUPPLICAN} -c ${SSID_CFG}
+        wpa_supplicant -Dnl80211 -B -i ${WLAN} -C ${WLAN0_SUPPLICAN} -c ${SSID_CFG}
+        echo wifi sta on finish
+        ;;
+    rm)
+        rm -f ${SSID_CFG}
+        echo "${SSID_CFG} cleaned"
+        ;;
+    off)
+        fn_udhcpc off
+        wpa_cli -p ${WLAN0_SUPPLICAN} -i${WLAN} terminate
+        sleep 2
+        ps | awk '/[w]pa_supplicant/{print $1}' | while read PID; do kill -9 $PID; done
+        rm -rf ${WLAN0_SUPPLICAN}
+        sleep .1
+        ifconfig ${WLAN} down
+        echo wifi sta off finish
+        ;;
+    reset|gwfail)
+        if [ "${1}" = gwfail ]; then
+            test -f /tmp/nogwfail && return || { echo gwfawi sleep 10s; sleep 10 ;}
+        fi
+
+        wpalock=/var/wpa.lock
+        if test -s $wpalock; then
+            if [ "${1}" = gwfail ]; then
+                echo $1@ prev: `cat ${wpalock}`, gwfail exiting
+            else
+                echo $1@ prev: `cat ${wpalock}`, waiting for 3s; sleep 3;
+            fi
+        fi
+        echo _____pid:$$ wpa reseting @$1 > ${wpalock}
+        echo _____pid:$$ wpa reseting @$1
+        wifi sta off;wifi sta on;
+        echo _____pid:$$ wpa reseting @$1 done
+        > $wpalock
+        ;;
+    step)
+        # [WiFi-Superman](https://zhuanlan.zhihu.com/p/23481790)
+        echo "
+        1 天线：Check antenna
+              2.4G 速度慢，波长长，传输距离长，抗干扰，5G则反之
+        2 功率 dBm = 10log(功率值/1mw)
+              dB是两个量之间的比值，表示两个量间的相对大小，而dBm则是表示功率绝对大小的值
+              在2.4GHz这个频段，设备的最大发射功率不能超过100mw，也就是20dBm。即所有无线设备的上限。
+              20.dBm 100mW
+               0.dBm 1mW，设备靠近路由时
+             -20.dBm 设备离路由0.5m
+             -45.dBm 设备离路由2.5m
+             具体查看信号：iwconfig[Link Quality]
+        3 参数：[iwconfig, ping]
+              传输速率BitRate(54Mb/s)
+              netstat Send-Q
+        4 排除信号干扰: 1.6.11
+        5 COMPLETE?     [wifi sta stat]
+        "
+        ;;
+    scan)
+        wpa_cli -p ${WLAN0_SUPPLICAN} -i${WLAN} scan
+        sleep 1
+        wpa_cli -p ${WLAN0_SUPPLICAN} -i${WLAN} scan_result
+        ;;
+    freq)
+        wpa_cli -p ${WLAN0_SUPPLICAN} -i${WLAN} scan
+        sleep 1
+        wpa_cli -p ${WLAN0_SUPPLICAN} -i${WLAN} scan_result | \
+            awk '/\<24/{printf "%4d  %2d  %s\n", $2,($2-2407)/5,$5}' | sort -k2
+        ;;
+    stat)
+        wpa_cli -p ${WLAN0_SUPPLICAN} -i${WLAN} status
+        ;;
+    conf)
+        ccli wificfg -act list
+        echo __configure__: ${SSID_CFG}
+        cat ${SSID_CFG}
+        ;;
+    zconf)
+        [ -f ${SSID_CFG} ] && cp ${SSID_CFG} ${SSID_CFG}.urs
+        fn_new_supplicant_conf
+        # sed -i -e 's/\<ssid=.*/ssid="TP-LINK_FFJCO.zhangj"/' -e 's/\<psk=.*/psk="jabsco123456"/' ${SSID_CFG}
+        echo "reset to connect TP-LINK_FFJCO.${2:-zhangj}, enjoy it!"
+        [ "${2}" = 'ff' ] && sed -i -e 's/.zhangj//g' ${SSID_CFG}
+        ;;
+    zconf2)
+        [ -f ${SSID_CFG} ] && cp ${SSID_CFG} ${SSID_CFG}.urs
+        fn_new_supplicant_conf 2
+        echo "reset to connect TP-LINK_FFJCO.zhangj2, enjoy it!"
+        ;;
+    *)
+        echo "Usage:
+        wifi sta {on|off|reset|rm|step|scan|freq|stat|conf|zconf2[ff]|zconf}
+        "
+        ;;
+    esac
+
+    return $?
+}
+
+fn_ap()
+{
+    case $1 in
+    off)
+        # dhcpd
+        ps | awk '/[u]dhcpd/{print $1}' | while read PID; do kill -9 $PID; done;
+        # release
+        hostapd_cli -i wlan1 all_sta |\
+            awk -F'=' '/dot11RSNAStatsSTAAddress=/{print $2}' |\
+            while read MAC; do
+                hostapd_cli -i wlan1 disassociate $MAC; sleep .1
+            done
+        # hostapd
+        ps | awk '/[h]ostapd/{print $1}' | while read PID; do kill -9 $PID; done;
+        # udhcpd
+        ps | awk '/[u]dhcpd/{print $1}' | while read PID; do kill -9 $PID; done;
+        ifconfig wlan1 down
+        ;;
+    on)
+        ifconfig wlan1 172.25.0.1 up
+        echo "\
+        start 172.25.0.20
+        end 172.25.0.254
+        interface wlan1
+        option  lease 864000
+        option  subnet 255.255.255.0
+        opt     dns     172.25.0.1
+        opt     router  172.25.0.1
+        opt     wins    172.25.0.1
+        option  domain  local
+        option  0x08    01020304        # option 8: cookie server IP addr: 1.2.3.4
+        " | sed 's/^  *//' > /tmp/udhcpd.conf
+        test -f /tmp/hostapd.conf || fn_ap conf
+        hostapd -B /tmp/hostapd.conf
+        udhcpd -fS /tmp/udhcpd.conf&
+        ;;
+ reset) fn_ap off; fn_ap on
+        ;;
+    ls) hostapd_cli -i wlan1 all_sta ;;
+    bc) fn_bestchn ${2}              ;;
+  conf)
+        CHN=`fn_bestchn bc bc`
+        # wlan0 and wlan1 mac is different, ap use wlan0 mac for SN code.
+        HALF_MAC=`ifconfig wlan0 | awk -F':' '/HWaddr/{print $5$6$7}' | tr -d ' '`
+        dig=`xml_shuttle -cr -k /cfg/devinfo/custom_appid /opt/conf/config.xml | awk '{ printf "%d", $3%100 }'`
+        dig_display=$([ "$dig" -eq 0 ] && printf "" || printf "%s" "$dig")
+        echo "\
+        interface=wlan1
+        ctrl_interface=/var/run/hostapd
+        driver=nl80211
+        wme_enabled=1
+        ht_capab=[SHORT-GI-20]
+        wpa_pairwise=TKIP
+        rsn_pairwise=CCMP
+        ssid=AICAM${dig_display}-${HALF_MAC}
+        wpa_passphrase=12345678
+        channel=${CHN:-11}
+        ieee80211n=1
+        hw_mode=g
+        wpa=2
+        wpa_key_mgmt=WPA-PSK
+        wpa_group_rekey=86400" | sed 's/^  *//' > /tmp/hostapd.conf
+        echo "AICAM${dig_display}-${HALF_MAC} 12345678"
+        ;;
+show|*)
+        echo "Usage:
+        wifi ap {ls|on|off|reset|bc|show}     # use CHN from /tmp/bc when the file exist
+        "
+        hostapd_cli -i wlan1 all_sta
+        ;;
+    esac
+}
+
+fn_acc()
+{
+    case ${1:-0} in
+    2) echo 4X ;;
+    1) echo 2X ;;
+    0) echo 1X ;;
+    *) echo Invalid; return ;;
+    esac
+
+    echo ${1:-0} > /opt/conf/wifi/acc_shift
+    grun wifi 1 on
+}
+
+fn_loop()
+{
+    case $1 in
+    a|alive)
+        grun wifi 0 off
+        echo "4g loop alive"
+        ;;
+    k|kill)
+        grun wifi 0 on
+        echo "4g loop kill"
+        ;;
+    s|stat)
+        grun wifi
+        ;;
+    *)
+        echo "loop {kill|alive|stat}"
+    esac
+}
+
+fn_udhcpc()
+{
+    PIDFILE='/var/network/dhcpc.pid.wlan'
+    if [ "${1}" = off ]; then
+        wpa_cli -p ${WLAN0_SUPPLICAN} -i${WLAN} status
+        ps | awk "/[u]dhcpc.*${WLAN}/{print \$1}" |\
+        while read PID; do kill -USR2 $PID; kill -9 $PID; done;
+        rm -f ${PIDFILE}
+        return
+    fi
+
+    mkdir -p /var/network
+
+    ps | awk "/[u]dhcpc.*${WLAN}/{print \$1}" |\
+    while read PID; do kill -USR2 $PID; kill -9 $PID; done;
+    udhcpc -i ${WLAN} -p ${PIDFILE} -b -T2 -A3 -R
+    echo "lzbox dhcp: udhcpc -i ${WLAN} -p${PIDFILE} -b -T2 -A3 -R"
+}
+
+fn_execute()
+{
+    WLAN=${WLAN:-wlan0}
+    WLAN0_SUPPLICAN="/var/run/${WLAN}_supplicant"
+
+    argv9="$@"
+    argv1=$1
+    case $argv1 in
+    list|l) ccli wificfg -act list ;;
+    ping|fn_ping)
+        if [ -z "${2}" ]; then
+            set_argv_ping
+            local i=0
+            for argv; do
+                printf " %-4s%s\n" $i "$argv"
+                let i++
+            done
+        else
+            case $2 in
+            [0-9]|[0-9][0-9])
+                seq=$2
+                pkg_count=$3
+                set_argv_ping
+                [ ${seq} -ge ${#} ] && \
+                fn_echo_fail "  -- fn_execute [${seq}] too big --" && return
+
+                i=0
+                while [ $i -lt ${seq} ]; do shift; let i++; done
+                set -- ${1}
+                cmd=$1
+                ping -c${pkg_count:-3} -w${4:-10} $cmd
+                set -- ${argv9}
+                shift
+                ;;
+            *)
+                fn_exe_usage; exit
+                ;;
+            esac
+        fi
+        ;;
+    '')
+        fn_exe_usage
+        set_argv_wifi
+
+        local i=0
+        for argv; do
+            printf " %-4s%s\n" $i "$argv"
+            let i++
+        done
+        echo
+        ;;
+    [0-9]|[0-9][0-9])
+        set_argv_wifi
+
+        [ $argv1 -ge ${#} ] && \
+        fn_execute --list && fn_echo_fail "  -- fn_execute $1 too big --" && return
+
+        i=0
+        while [ $i -lt $argv1 ]; do shift; let i++; done
+
+        set -- ${1}
+        cmd=$1
+        set -- ${argv9}
+        shift
+        fn_${cmd} "${@}"
+        ;;
+    *)
+        set_argv_wifi
+
+        local i=0
+        for argv; do
+            if echo $argv | grep -q "^$argv1\>" ; then
+                set -- $argv
+                cmd=$1
+                set -- ${argv9}
+                shift
+                fn_${cmd} "${@}"
+                return $?            # avoid _fn_exe_usage_
+            fi
+        done
+        fn_exe_usage
+        ;;
+    esac
+}
+
+fn_wifi()
+{
+    f_idven='/opt/conf/wifi/idVendor'
+    USB_IDVENDOR="/sys/bus/usb/devices/1-1/idVendor"
+    USB_IDPRODUCT="/sys/bus/usb/devices/1-1/idProduct"
+    idVendor=`cat ${USB_IDVENDOR}`
+
+    if [ -z "${idVendor}" ]; then
+        [ -s "${f_idven}" ] && idVendor=`cat ${f_idven}`
+        echo "____ not exist ${USB_IDVENDOR}"
+    else
+        [ -z "${f_idven}" ] && id_ven=`cat ${f_idven}`
+        [ "${idVendor}" != "${id_ven}" ] && echo ${idVendor} > ${f_idven}
+    fi
+
+    case ${idVendor} in
+    0bda) drv_name=8188fu  ;;
+    8065) drv_name=ssv6x5x ;;
+    ffff) drv_name=ws73    ;;
+       *) drv_name=ws73; fn_echo_fail "________ unknow wifi chip $idVendor _____" ;;
+    esac
+
+    fn_execute "$@"
+}
+
+list_usb="
+| NO. | Comp.   | Name    | vendor:prod |
+| :-- | :------ | :------ | :---------  |
+| 1   |         | 8188fu  | 0bda:f179   |
+| 2   | 欧智通  | ssv6x5x | 8065.6011   |
+| 3   | 中龙通  | ws73    | ffff:3733   |
+"
+
+fn_wifi $@

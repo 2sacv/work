@@ -1,0 +1,11 @@
+#!/bin/sh
+
+fn_main() 
+{    
+	sleep 180
+
+	killall feedwdt
+	reboot
+}
+
+fn_main $@

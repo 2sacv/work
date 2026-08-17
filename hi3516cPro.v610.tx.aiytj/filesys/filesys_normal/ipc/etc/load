@@ -1,0 +1,58 @@
+#! /bin/sh
+
+fn_mmc_drv()
+{
+    feedwdt &
+
+    insmod /ipc/drv/mmc/mmc_core.ko
+    insmod /ipc/drv/mmc/mmc_block.ko
+    insmod /ipc/drv/mmc/pwrseq_simple.ko
+    insmod /ipc/drv/mmc/sdhci_complement.ko
+    insmod /ipc/drv/mmc/sdhci.ko
+    insmod /ipc/drv/mmc/sdhci_pltfm.ko
+    insmod /ipc/drv/mmc/sdhcinebula.ko
+
+    pid=$(ps | grep -v $$ | awk '/feedwdt/ && !/awk/ {print $1}')
+    if [ -n "$pid" ]; then
+        for p in $pid; do
+            kill -9 "$p"
+        done
+    fi
+}
+
+fn_main()
+{
+    fn_mmc_drv
+
+ #   insmod /ipc/drv/reg.ko
+ #   insmod /ipc/drv/gpio.ko
+ #   insmod /ipc/drv/gd25q.ko
+ #   insmod /ipc/drv/am2315c.ko
+    insmod /ipc/drv/jco_hwtimer.ko
+    insmod /ipc/drv/motor.ko
+    if test -f /ipc/bin/4g; then
+        insmod /ipc/drv/usb/mii.ko
+    fi
+#	/ipc/etc/nfs_load.sh -i
+}
+
+fn_setenv()
+{
+    #此处触发后台mmc热拔插，需延时一段时间跑auto_mount.sh
+	mdev -s
+    sleep 1
+
+	echo 3 > /proc/sys/vm/drop_caches
+
+	#系统默认值： 163840  ， 163840 ， 1000 ， 10240 ， 843     1127    1686 ， 4096    16384   577088
+
+	echo 256960 > /proc/sys/net/core/wmem_max
+	echo 256960 > /proc/sys/net/core/wmem_default
+	echo 2000 > /proc/sys/net/core/netdev_max_backlog
+	echo 40960 > /proc/sys/net/core/optmem_max
+	echo "1536 2048 3072" > /proc/sys/net/ipv4/tcp_mem
+	echo "8192 256960 513920" > /proc/sys/net/ipv4/tcp_wmem
+}
+
+fn_main $@
+fn_setenv $@

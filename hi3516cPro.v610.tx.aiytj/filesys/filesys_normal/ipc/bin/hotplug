@@ -1,0 +1,64 @@
+#! /bin/sh
+
+export PATH=/ipc/bin:$PATH
+SYSLOG() { /bin/logger -t jcommc "$@"; echo $@ > /dev/console ;}
+
+fn_pri_time()
+{
+    cat /opt/conf/reboot.epoch
+    # 异常的坏卡，读取目录下的内容可能会卡死，这里打印时间就简单打印 IPCamera 目录的最后修改时间
+    timeout 1 ls -l -d /mnt/IPCamera
+}
+
+fn_mount()
+{
+    sleep .3
+    nr_blk=`ls /dev/mmcblk0p* 2>/dev/ull | wc -l`
+    mmc0='/tmp/mmc.log'
+
+    if [ "${nr_blk:-0}" -eq 1 ] && [ $MDEV = mmcblk0 ]; then    # one
+        SYSLOG "__ ignore part $1 bcz p1 exist"; exit 1
+    fi
+
+    if [ "${nr_blk:-0}" -gt 1 ] && [ $MDEV != mmcblk0 ]; then   # multi
+        SYSLOG "ignore blk $1"; exit 1 
+    fi
+
+    rm -f /opt/log/auto_sd* /opt/log/sd.format
+    let i=0
+    while ps | grep -q '[a]uto_mount.sh' && [ $i -lt 30 ]; do
+        let i++
+        SYSLOG "waiting '[a]uto_mount.sh' $i over"
+        ls /dev/mmcblk0p*
+        sleep 1
+    done
+
+    { /ipc/bin/auto_mount.sh $@; fn_pri_time ;} > ${mmc0} 2>&1
+
+    SYSLOG "hotplug ENV $PATH, log0: ${mmc0}"
+
+    s_start=`awk -F. '{print $1}' /proc/uptime`
+    if [ "${s_start:-0}"  -gt 10 ]; then
+        printf "\n_______ show /tmp/mmc.log ______\n\n" > /dev/console
+        cat ${mmc0} > /dev/console
+    fi
+
+    # stdout 更清晰
+    { tail -15 /tmp/messages | grep jcommc; dmesg | grep this_boot -C10 ;} >> ${mmc0}
+    /ipc/bin/toggle mmc log
+}
+
+fn_main()
+{
+    [ -f /ipc/bin/ccli ] || return
+    echo "hotplug auto $1"
+    #${LOGGER} "[$ACTION] [$MDEV] [$1] "
+    case $1 in
+    add) fn_mount $MDEV $2              ;;
+    del) /ipc/bin/auto_umount.sh        ;;
+      *) SYSLOG "unknow $MDEV $ACTION"  ;;
+    esac
+    return $?
+}
+
+fn_main $@

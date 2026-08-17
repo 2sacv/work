@@ -1,0 +1,46 @@
+
+
+1. 文件列表
+
+    config.org                      # xml出厂配置
+    config.xml                      # 经过修改的xml配置
+    factory.kep.list                # 同步到出厂配置的xpath列表
+    factory.kep.pair.1080p          # 1080p默认编码配置
+    upgrade.add.list                # 从svn HEAD版本开始，新增的所有xpath
+    upgrade.mod.list                # 强制更新的项：platform extra_apps
+    platform.full.list              # 平台相关列表
+    platform.kep.list               # 平台相关，恢复出厂时保持，打包时追加到 factory.kep.list
+
+    ----------------------------------------------------------------
+    NOTE: 
+        1 config.org中新增的节点一定要同步到upgrade.add.list
+        2 像新增dome类的大节点，确保一定会恢复出厂的情况下，可以考虑不放到upgrade.add.list
+
+2. factory.kep.pair.* 文件格式
+
+    gnum组号 xpath路径 value
+
+    以空格分隔的3元组，第3项可以省略
+    col-1 gnum
+    col-2 key
+    col-3 value
+
+3. *.list 文件格式
+
+    gnum组号 xpath路径
+
+
+4. 升级时处理
+
+    打包时由 upgrade.add.list生成 upgrade.add.pair。
+    将upgrade.add.pair插入到config.xml
+
+    由 upgrade.mod.list生成 upgrade.mod.pair。
+    将upgrade.add.pair插入到config.xml
+
+5. 恢复出厂默认
+
+    1. 识别最大分辨率后，挑选出 factory.kep.pair.xxx，将之插入到config.org
+    2. 由 factory.kep.list 生成 factory.kep.pair，修改 config.org 
+    3. 复制config.org到config.xml
+

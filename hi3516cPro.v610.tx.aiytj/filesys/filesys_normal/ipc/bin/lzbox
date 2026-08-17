@@ -1,0 +1,1238 @@
+#! /bin/sh
+
+alias set_argv_jzzz='set --   \
+    "aio      {ig|iv|og|ov} val # {ingain involume outgain outvolume} __val__"\
+    "gpio_put PIN {0|[1]}       #
+              82                # PC18 wifi_en
+              72                # PC08 index led_en, green when power on"\
+    "gpio_cat                   #"
+'
+
+alias set_argv_lzbox='set --                                 \
+    "cid                        # create 32bit cid to sdcard"\
+    "telnet         {0|[1]}     # enable telnetd in local.rc"\
+    "ffw       {untar|info|600} # info or untar or create en_chn_600s.txt"\
+    "sysinfo                    # sysctrl -act list FORMAT"\
+    "wifictl   {on|off|reset}   # {air|dhcp[off]|scan|freq|stat|conf|rmmod|insmod}"\
+    "vm          [drop|cma]     # memory
+                 s              # valgrind vm statistics
+                 x              # pmap -x pidof(jco_server)"\
+    "box                        # Frequent command"\
+    "ap        {on|off|reset|ls}# "\
+    "fps         [1]            # "\
+    "nopswd      off|on         # logen without password"  \
+    "wlan1     {on|off|reset}   # {air|dhcp[off]|scan|freq|stat|conf|rmmod|insmod}"\
+    "rtl       {proc}           # "\
+    "log                        # tar all messages"\
+    "sdlog       [rm]           # add|rm syslog to sdcard"\
+    "stat                       # fd"\
+    "calc        a+b*c^5        # statement"\
+    "adda                       # adda308"\
+    "audiofd     [443]          # audio fd"\
+    "tag         test           # test_ver"\
+    "fat                        # fat read error repair"\
+    "sdcard                     # touch mkdir readonly"\
+    "dec2bin                    # dec2bin"\
+    "dbglist                    # dbglist"\
+    "wget       [tool/t31] [.]  # . to /tmp/bin"\
+    "wait_cache_sync            # exam and wait all cache is written until timeout"\
+    "dbg_no_frame               # "\
+    "temp                       # "\
+    "get_bin                    # cat /dev/mtd[0-9] > /mnt/output_sf_fireware.bin"\
+'
+
+export LD_LIBRARY_PATH=/ipc/lib:/lib:$LD_LIBRARY_PATH
+
+fn_echo_clor() { TEXT="$@"; echo "$FG: ${TEXT}" > /dev/stdout ;}
+fn_echo_fail() { FG=fail fn_echo_clor "$@" ;}   # red
+fn_echo_succ() { FG=succ fn_echo_clor "$@" ;}   # green
+fn_echo_warn() { FG=warn fn_echo_clor "$@" ;}   # yellow
+
+SYSLOG() { /usr/bin/logger -t jcommc "$@"; echo $@ > /dev/console ;}
+xt_ret()
+{
+    [ "${1}" = "0" ] && return 0
+    echo "${2}"
+    return 1
+}
+
+fn_get_bin()
+{
+    # 执行转储操作
+    fn_echo_warn "Dumping MTDs to /tmp/output_sf_fireware.bin (may take time)..."
+    rm  -rf /opt/log/
+    rm  -rf /opt/etc/*
+    rm  -rf /opt/etc/.ash_history
+    rm  -rf /opt/conf/airlink/* 
+    rm  -rf /opt/conf/4g
+    rm  -rf /opt/conf/reboot.epoch
+    rm  -rf /opt/conf/ptz_config.bin
+    rm  -rf /opt/conf/ptz.conf
+    rm  -rf /opt/conf/*.key                 
+    rm  -rf /opt/conf/eth.pair              
+    rm  -rf /opt/conf/config.xml            
+    rm  -rf /opt/conf/tencent.conf          
+    echo 'i am c_u_s_t_o_m bin' >> /opt/conf/README
+    sync 
+
+    # devid 或三元组存在，不生成固件，防止流出到工厂造成大面积返工
+    if [ -f "/opt/conf/tencent.conf" ] || ! grep 'device_id=00000000000' /proc/cmdline; then
+        fn_echo_fail "/opt/conf/tencent.conf || burned device_id"  
+        exit
+    fi
+
+    cat /dev/mtd[0-6] > /mnt/output_sf_fireware2.bin
+    sync
+    echo '
+    /mnt/output_sf_fireware2.bin prepared, enjoy it!
+    '
+}
+
+fn_fps()
+{
+    cd /proc/driver
+    echo "isp"
+    cat isp | grep -i fps
+    echo "vpu"
+    cat vpu | grep -i frame
+    echo "enc"
+    cat enc | grep -i fps
+}
+
+fn_exe_usage()
+{
+    echo "Usage:
+     ${0##*/} list                 # list all commands
+     ${0##*/} {id|key} [value:0]   # exec key command
+     ${0##*/} / key                # list key details
+    "
+}
+
+fn_execute()
+{
+    argv9="$@"
+    argv1=$1
+    case $argv1 in
+    ''|l|-l|--list)
+        fn_exe_usage
+        [ "${lzbox}" = lzb ]  && set_argv_lzbox
+        [ "${lzbox}" = jzzz ] && set_argv_jzzz
+
+        local i=0
+        for argv; do
+            printf " %-4s%s\n" $i "$argv"
+            let i++
+        done
+        echo
+        ;;
+    [0-9]|[0-9][0-9])
+        [ "${lzbox}" = lzb ]  && set_argv_lzbox
+        [ "${lzbox}" = jzzz ] && set_argv_jzzz
+
+        [ $argv1 -ge ${#} ] && \
+        fn_execute --list && fn_echo_fail "  -- fn_execute $1 too big --" && return
+
+        i=0
+        while [ $i -lt $argv1 ]; do shift; let i++; done
+
+        set -- ${1}
+        cmd=$1
+
+        set -- ${argv9}
+        shift
+        fn_${cmd} "${@}"
+        ;;
+    *)
+        [ "${lzbox}" = lzb ]  && set_argv_lzbox
+        [ "${lzbox}" = jzzz ] && set_argv_jzzz
+        local i=0
+        for argv; do
+            if echo $argv | grep -q "^$argv1" ; then
+                set -- $argv
+                cmd=$1
+                set -- ${argv9}
+                shift
+                fn_${cmd} "${@}"
+                return $?            # avoid _fn_exe_usage_
+            fi
+        done
+        fn_exe_usage
+        ;;
+    esac
+}
+
+fn_telnet()
+{
+    touch ${local_rc}
+    chmod +x ${local_rc}
+    if [ "${1}" = 0 ]; then
+        sed -i '/telnetd/d' ${local_rc}
+        rm -f /tmp/tag.test_ver
+    else
+        xml_shuttle -i -cw -k /cfg/authmode/mode -v 0 /opt/conf/config.xml
+        ccli authmode -act set -mode 0 > /dev/null 2>&1
+        gsys testing on
+
+        cmd='telnetd -p24; touch /tmp/tag.test_ver'
+        sed -i '/telnetd/d' ${local_rc}
+        echo "${cmd}" >> ${local_rc}
+        fn_echo_succ "enable telnet port:24 succ, enjoy it!"
+        eval ${cmd}
+    fi
+    return $?
+}
+
+fn_roll()
+{
+    file=${1}
+    bo=${2:-4}
+    let zhong=bo-1
+
+    test -f ${file}
+    xt_ret $? "[$1] not exist" || return $?
+
+    i=$zhong
+    j=$bo
+
+    while [ i -gt 0 ]; do
+        test -f "${file}.$i" && mv ${file}.$i ${file}.$j
+	let i-=1
+	let j-=1
+    done
+
+    #for (( i=$zhong,j=$bo; i>0; i-=1,j-=1 )); do
+    #    test -f "${file}.$i" && mv ${file}.$i ${file}.$j
+    #done
+
+    test -f "${file}" && mv ${file} ${file}.1
+}
+
+fn_sdlog()
+{
+    pif='/tmp/sdlog.pid'
+
+    fn_sdlog_sync() {
+        if ! df | grep -q mmcblk0p1; then
+            logger "no sd-card, __exit__ "
+            exit
+        fi
+        dot='/mnt/messages.dot'
+        log='/mnt/messages'
+
+        ps | awk '/[s]yslogd/{print $1}' | while read PID; do kill -USR2 $PID;   kill -9 $PID; done;
+        syslogd -s 256 -S -O /tmp/messages      # 160 bytes/line, 160K = 1000 lines = 2000s = 30min
+
+        while :; do
+            touch $log || mount -o remount,rw /dev/mmcblk0p1 /mnt
+            sync_time=`date +%F.%T`
+
+            echo sync_time:${sync_time} >> $log
+            cat /tmp/messages >> $log
+            > /tmp/messages
+            sk=`du -sk $log | awk '{print $1}'`
+            [ "${sk:-0}" -gt 10240 ] && fn_roll ${log}
+
+            echo sync_time:${sync_time} >> $dot
+            cat /tmp/messages.dot >> $dot
+            ccli toggle -act set -code 1090     #  inner clean > /tmp/messages.dot
+            sk=`du -sk $dot | awk '{print $1}'`
+            [ "${sk:-0}" -gt 10240 ] && fn_roll ${dot}
+
+            sleep 900
+        done
+    }
+
+    touch ${local_rc}
+    chmod +x ${local_rc}
+
+    case $1 in
+    'sd_sync')
+        touch ${pif}
+        while read PID; do kill -9 $PID; done < ${pif}
+        fn_sdlog_sync &
+        echo "$!" > ${pif}
+        ;;
+    'rm')
+        sed -i '/.yslogd/d' ${local_rc}
+        fn_echo_succ "[disable] sdcard syslogd succ, enjoy it!"
+        ;;
+    *)
+        if df | grep -q mmcblk0p1; then
+            sed -i '/.yslogd/d' ${local_rc}
+            cat <<-"HERE"  >> ${local_rc}
+			lzbox sdlog sd_sync                                                                         # syslogd
+			HERE
+            ${local_rc} &
+            ka
+            fn_echo_succ "[enable] sdcard syslogd succ, enjoy it!"
+        else
+            fn_echo_warn "no sdcard, please check!"
+        fi
+        ;;
+    esac
+
+    return $?
+}
+
+fn_ffw()
+{
+    pack_ffw='/mnt/ffw.txt'
+    file_ffw=${2:-/mnt/`sed 's/ffw.*/ffw/g' $pack_ffw`}
+    temp_ffw='/tmp/.ffw'
+
+    # no quoted, to allow whitespace at end of line
+    pwd
+    [ -f ${file_ffw} ]
+    xt_ret $? "_ ${file_ffw} _ not exist" || return $?
+
+    case $1 in
+    600)
+        touch /mnt/en_chn_600s.txt
+        ;;
+    untar)
+        rm -rf /tmp/upgrade.tgz
+
+        tail -c21 "${file_ffw}" > ${temp_ffw}
+        timestamp=`tail -c19 ${temp_ffw}`
+
+        echo $timestamp | grep -q '^20..-..-..'
+        xt_ret $? "Error: [$timestamp] not format[2008-08-08]" || return $?
+
+        nr_dev_type=`head -c2 ${temp_ffw}`
+        echo "nr_dev_type is ${nr_dev_type}"
+        let nr_tail=$nr_dev_type+21
+
+        dev_type=`tail -c$nr_tail "${file_ffw}" | head -c$nr_dev_type`
+        xt_ret $? "" || return $?
+
+        [ "${dev_type}" = `cat /ipc/etc/dev_type` ] || [ "${dev_type}" = forceforce ]
+        xt_ret $? "dev_type ${dev_type} not match" || return $?
+
+        ts_old=`cat /ipc/etc/timestamp | sed 's/[-:.]//g'`
+        timestamp=`echo ${timestamp} | sed 's/[-:.]//g'`
+
+        ahead=$(($timestamp-$ts_old))
+        #为防止ahead数值超出比较范围，取其前五位字符
+        ahead_front=${ahead:0:5}
+        if [ "${dev_type}" != forceforce ]; then
+            if [ -f /mnt/en_chn_600s.txt ]; then
+                [ ${ahead_front:--601} -gt -600 ]
+                xt_ret $? "abs(ahead) = $ahead" || return $?
+                [ ${ahead_front} -ne 0 ]
+                xt_ret $? "ahead = 0, same ffw" || return $?
+            elif [ -f /mnt/update_force.txt ]; then
+                echo "update_force"
+            elif [ -f /mnt/update_again.txt ]; then
+                echo "update_again"
+            else
+                [ ${ahead_front} -gt 0 ]
+                xt_ret $? "$timestamp not-great-than $ts_old" || return $?
+            fi
+        fi
+
+        # no stat,truncate,head -c-K
+        nr_total=`ls -l ${file_ffw} | awk '{print $5}'`
+        let nr_no_tail=$nr_total-$nr_tail
+
+        #echo $nr_total --------- $nr_no_tail ---- $file_ffw
+        if [ -f /mnt/update_force.txt ]; then
+              rm /mnt/update_force.txt
+        fi
+
+        head -c${nr_no_tail} "${file_ffw}" > /tmp/upgrade.tgz
+        md5sum /tmp/upgrade.tgz | awk '{print $1}' > /tmp/upmd5
+        cat /tmp/upmd5
+        if [ "${dev_type}" == forceforce ]; then
+            if [ -f /opt/conf/custom_upmd5  ]; then
+                if diff /opt/conf/custom_upmd5 /tmp/upmd5; then
+                    echo 'same ffw, skip'
+                    rm -f /tmp/upgrade.tgz
+                fi
+            fi
+            # for safe, should in ipc_upgrade.sh
+            cp /tmp/upmd5 /opt/conf/custom_upmd5; sync
+        fi
+        sync
+        fn_echo_succ "untar /tmp/upgrade.tgz succ"
+        ;;
+    info)
+        #1234567890123456789
+        #2008-08-08.20:08:08
+        tail -c21 "${file_ffw}" > ${temp_ffw}
+        timestamp=`tail -c19 ${temp_ffw}`
+
+        echo $timestamp | grep -q '^20..-..-..'
+        xt_ret $? "Error: [$timestamp] not format[2008-08-08]" || return $?
+
+        nr_dev_type=`head -c2 ${temp_ffw}`
+        let nr_tail=$nr_dev_type+21
+
+
+        dev_type=`tail -c$nr_tail "${file_ffw}" | head -c$nr_dev_type`
+        xt_ret $? "" || return $?
+
+        #echo ts: $timestamp nr_tail: $nr_tail nr_dev_type: $nr_dev_type
+
+        fn_echo_succ "\
+        info:
+            timestamp: ${timestamp}
+            dev_type : ${dev_type}
+        "
+        ;;
+    *)
+        echo "Usage: ffw {untar|info}"
+        ;;
+    esac
+
+    return $?
+}
+
+fn_sdcard()
+{
+    set -x
+    dir=/mnt
+    dev=/dev/mmcblk0p1
+    [ ! -e "${dev}" ] && dev=/dev/mmcblk0
+
+    case $1 in
+    insert)
+        echo sd $1; echo up > /sys/class/mmc_host/mmc0/power_control
+        ;;
+    remove)
+        echo sd $1; echo off > /sys/class/mmc_host/mmc0/power_control
+        ;;
+    f|format)
+        let i=0
+        while ps | grep -q '[a]uto_mount.sh' && [ $i -lt 10 ]; do
+            let i++
+            SYSLOG "waiting '[a]uto_mount.sh' $i over"
+            ls /dev/mmcblk0p*
+            sleep 1
+        done
+
+        mmc0='/tmp/mmc.log'
+        sleep .3
+        SYSLOG "sd-formating `cat /sys/block/mmcblk0/device/cid`"
+
+        # avoid format when mounting
+        let i=0
+        while ps | grep -q '[a]uto_mount.sh' && [ $i -lt 30 ]; do
+            let i++
+            SYSLOG "waiting '[a]uto_mount.sh' $i over"
+            ls /dev/mmcblk0p*
+            sleep 1
+        done
+
+        {
+        mountpoint /mnt && umount /mnt || lsof | grep /mnt
+        /ipc/bin/auto_mount.sh fmt
+        cat /opt/conf/reboot.epoch
+        } > ${mmc0} 2>&1
+
+        printf "\n_______ show /tmp/mmc.log ______\n\n" > /dev/console
+        cat ${mmc0} > /dev/console
+
+        # stdout 更清晰
+        { tail -15 /tmp/messages | grep jcommc; dmesg | tail -15 ;} >> ${mmc0}
+        /ipc/bin/toggle mmc log
+        ;;
+    m|mount)
+        mkdir -p ${dir}
+        mount ${dev} ${dir}
+        /ipc/bin/ccli sdcard -act add -path $dir
+        ;;
+    u|umount)
+        mountpoint ${dir} && {
+            # mp4.close need time always
+            sleep .5
+            for i in 1 2 3; do
+                pid=`fuser -m ${dir}`
+                [ -z "${pid}" ] && break || echo "sd is using"
+                sleep 2
+            done
+            [ -n "${pid}" ] && fuser -m ${dir} -k && sleep .5
+            umount -f ${dir};
+        }
+        ;;
+    rw) mount -o remount,rw ${dir} ;;
+    ro) mount -o remount,ro ${dir} ;;
+    R|Repair)
+        # fsck.fat GOT < malloc:Cannot allocate memory >, so remount
+        mount -o noatime,nodiratime,remount,rw ${dir}
+        ;;
+    fsck)
+        fsck.exfat -a $dev
+        mount -o noatime,nodiratime,remount,rw ${dir}
+        ;;
+    *) echo "Usage: {mount|umount|format|ro|rw|Repair} [dev]"
+        ;;
+    esac
+}
+
+fn_cid()
+{
+    sd_cid='/sys/block/mmcblk0/device/cid'
+    file_cid='/mnt/cid.txt'
+
+
+    [ -n "${1}" ] && file_cid='/tmp/cid.txt'
+
+    [ -f "${sd_cid}" ]
+    xt_ret $? "${sd_cid} not exist, CHECK your SD card please" || return $?
+
+    df -h | grep -q '/mnt'
+    xt_ret $? "sdcard not mounted, CHECK your system please" || return $?
+
+    awk '{printf "%s" $1}' ${sd_cid} | sed 's/..$/00/' | md5sum | awk '{printf "%s" $1}' > ${file_cid}
+    sync; sleep 1; sync
+
+    if [ `wc -c < ${file_cid}` = 32 ]; then
+        fn_echo_succ "create ssid@${file_cid} succ, enjoy it!"
+    else
+        fn_echo_fail "create ssid fail, please check env!"
+    fi
+}
+
+fn_log()
+{
+    ip=`ifconfig wlan0 | grep "inet addr" | cut -d : -f 2 | cut -d ' ' -f 1`
+    cd /opt/log
+    cp /tmp/messages messages.live
+    # .bz2在win7上双击不直接解压，需要在Linux中解压
+    rm -f *.tgz
+    tar -zcvf /tmp/${ip}.log.tgz *
+    ln -sf /tmp/${ip}.log.tgz ${ip}.log.tgz
+    rm -f messages.live
+    echo "
+    Download:
+    ${ip}/log/${ip}.log.tgz
+    "
+    return $?
+}
+
+fn_stat()
+{
+    PID=`ps | awk '/[j]co_server/{print $1}'`
+    fds=`ls /proc/$PID/fd | wc -l`
+    threads=`ls /proc/$PID/task | wc -l`
+
+    echo "
+    num.fd      ${fds}
+    num.thread  ${threads}
+    "
+    return $?
+}
+
+fn_new_supplicant_conf()
+{
+test -f /opt/etc/iw.conf && cp /opt/etc/iw.conf ${SSID_CFG} && return
+echo \
+"network={
+    ssid=\"TP-LINK_FFJCO.zhangj${1}\"
+    key_mgmt=WPA-PSK
+    scan_ssid=1
+    psk=\"jabsco123456\"
+}" > ${SSID_CFG}
+}
+
+fn_do_weight() {
+    sum=0
+    cn=0
+    set -- ${_w}
+    for c in ${_c}; do
+        let cn++
+        eval "w=\${$cn}"
+        for i in ${chns}; do
+            if [ ${c} -eq "${i}" ]; then
+                let sum=sum+${w}
+            fi
+        done
+    done
+    echo -e "${freq}\t${sum}"
+}
+
+# 1. 以频道距离为权重weight(距离越近，干扰越大，权重越大)，
+# 2. 为每个通道进行加权计算sum(weight)，
+# 3. sum(weight)最小者，即最佳通道
+fn_bestchn()
+{
+    act=$1
+    tmpf='/tmp/freq'
+    wbcf='/tmp/wbcf'
+    ifconfig wlan0 up
+    iwlist wlan0 scan | sed -n -e '/Frequency:/p' -e '/Quality/p' | sed 'N;s/)\n/ /' | sort -k4 -g > ${tmpf}
+    #ed -i 's/ dBm//g' ${tmpf}      # ingenic
+    #ed -i 's# /100##g' ${tmpf}     # mstar
+    test -s ${tmpf}
+    xt_ret $? "" || return $?
+
+    chns="`awk '{print $4}' ${tmpf}`"
+    #et -A dbms `awk -F'=' '{print $3}' ${tmpf}`
+    #et -A wgts `awk -F'=' '{print $3}' ${tmpf}`
+
+    _c="1 2 3 4 5"
+    _w="5 4 3 2 1"
+    freq=1 fn_do_weight  > ${wbcf}
+
+    _c="1 2 3 4 5 6"
+    _w="4 5 4 3 2 1"
+    freq=2 fn_do_weight  >> ${wbcf}
+
+    _c="1 2 3 4 5 6 7"
+    _w="3 4 5 4 3 2 1"
+    freq=3  fn_do_weight  >> ${wbcf}
+
+    _c="1 2 3 4 5 6 7 8"
+    _w="2 3 4 5 4 3 2 1"
+    freq=4  fn_do_weight  >> ${wbcf}
+
+    _c="1 2 3 4 5 6 7 8 9"
+    _w="1 2 3 4 5 4 3 2 1"
+    freq=5  fn_do_weight  >> ${wbcf}
+
+    _c="2 3 4 5 6 7 8 9 10"
+    _w="1 2 3 4 5 4 3 2 1"
+    freq=6  fn_do_weight  >> ${wbcf}
+
+    _c="3 4 5 6 7 8 9 10 11"
+    _w="1 2 3 4 5 4 3 2 1"
+    freq=7  fn_do_weight  >> ${wbcf}
+
+    _c="4 5 6 7 8 9 10 11 12"
+    _w="1 2 3 4 5 4 3 2 1"
+    freq=8  fn_do_weight  >> ${wbcf}
+
+    _c="5 6 7 8 9 10 11 12 13"
+    _w="1 2 3 4 5 4 3 2 1"
+    freq=9  fn_do_weight  >> ${wbcf}
+
+    _c="6 7 8 9 10 11 12 13"
+    _w="1 2 3 4 5  4 3 2 1"
+    freq=10 fn_do_weight  >> ${wbcf}
+
+    _c="7 8 9 10 11 12 13"
+    _w="1 2 3 4  5  4 3 2"
+    freq=11 fn_do_weight  >> ${wbcf}
+
+#   _c="8 9 10 11 12 13"
+#   _w="1 2 3  4  5  4"
+#   freq=12 fn_do_weight  >> ${wbcf}
+
+#   _c="9 10 11 12 13"
+#   _w="1 2  3  4  5"
+#   freq=13 fn_do_weight  >> ${wbcf}
+
+    if [ "${act}" = bc ]; then
+        sort -g -k2 ${wbcf} | awk 'NR==1 {print $1}'
+    else
+        sort -g -k2 ${wbcf}
+    fi
+}
+
+fn_get_wifilist()
+{
+    # 剔除前置空格
+    # 提取 'ESSID|level'
+    # 组合两行为一行
+    iwlist wlan0 scanning |grep -E 'ESSID|level' | sed -e 's/^  *//g' -e 's/Quality.*level=//g' | sed 's#/.*##g' > /tmp/wlist.tmp
+    while read; do
+        echo "$REPLY"  | grep ESSID && continue
+        let sig=$REPLY+$REPLY/2
+        [ ${sig:-0} -gt 100 ] && sig=100
+        [ ${sig:-0} -lt 0 ] && sig=0
+        echo $sig
+    done < /tmp/wlist.tmp > /tmp/wlist.out
+    sed 'N;s/\n/,/' /tmp/wlist.out | grep -v '""' | grep -v "HSIPC" | sed -e 's/ESSID:"//g'  -e 's/",/=/g' -e 's/$/=4=3;/g' | head -29 > /tmp/wlist.ripe
+    myssid=`iwconfig wlan0 | grep -E 'ESSID' | sed -e 's/.*ESSID:"//g' -e 's/".*//g'`
+    if ! grep "^$myssid=" /tmp/wlist.ripe && [ -n "$myssid" ]; then
+        lvl=`iwconfig wlan0 | grep -E level | sed -e "s/.*Signal level=//g" -e 's#/.*##g'`
+        let sig=$lvl+$lvl/2
+        echo "$myssid=$sig=4=3;" >> /tmp/wlist.ripe
+    fi
+    sort -t= -k2 -g -r /tmp/wlist.ripe | awk '{printf "%s" $1}' > /tmp/wlist.yammy
+}
+fn_wifictl()
+{
+    WLAN=${WLAN:-wlan0}
+    WLAN0_SUPPLICAN="/var/run/${WLAN}_supplicant"
+    DANALE_RTL8188_CFG_OK="/opt/conf/airlink/supplicantOK.conf"
+    DANALE_RTL8188_CFG_TMP="/tmp/supplicant.conf"
+    WIFI_GUN_CFG="/opt/conf/supplicant.conf"
+    PIDFILE='/var/network/dhcpc.pid.wlan'
+    if test -f ${DANALE_RTL8188_CFG_TMP}; then
+        SSID_CFG=${DANALE_RTL8188_CFG_TMP}
+    else
+        SSID_CFG=${DANALE_RTL8188_CFG_OK}
+    fi
+    case $1 in
+    on_w)
+        ifconfig ${WLAN} up
+        wpa_supplicant -Dwext -B -i ${WLAN} -C ${WLAN0_SUPPLICAN} -c ${SSID_CFG}
+        echo ___________lzbox finish on_w
+        ;;
+    on)
+        ifconfig ${WLAN} up
+        echo wpa_supplicant -Dnl80211 -B -i ${WLAN} -C ${WLAN0_SUPPLICAN} -c ${SSID_CFG}
+        wpa_supplicant -Dnl80211 -B -i ${WLAN} -C ${WLAN0_SUPPLICAN} -c ${SSID_CFG}
+        echo ___________lzbox finish on8
+        ;;
+    rm)
+        rm -f ${SSID_CFG}
+        echo "${SSID_CFG} cleaned"
+        ;;
+    off)
+        fn_wifictl dhcp off
+        wpa_cli -p ${WLAN0_SUPPLICAN} -i${WLAN} terminate
+        sleep 2
+        ps | awk '/[w]pa_supplicant/{print $1}' | while read PID; do kill -9 $PID; done
+        rm -rf ${WLAN0_SUPPLICAN}
+        sleep .1
+        ifconfig ${WLAN} down
+        echo ___________lzbox finish off
+        ;;
+    air)
+        air_f='/tmp/airlink_test'
+        echo "_proc_ ${air_f}"
+        touch ${air_f}
+        [ -n "${2}" ] && rm -f ${air_f}
+        ;;
+    reset|gwfail)
+        if [ "${1}" = gwfail ]; then
+            test -f /tmp/nogwfail && return || { echo gwfawi sleep 10s; sleep 10 ;}
+        fi
+        wpalock=/var/wpa.lock
+        if test -s $wpalock; then
+            if [ "${1}" = gwfail ]; then
+                echo $1@ prev: `cat ${wpalock}`, gwfail exiting
+            else
+                echo $1@ prev: `cat ${wpalock}`, waiting for 3s; sleep 3;
+            fi
+        fi
+        echo _____pid:$$ wpa reseting @$1 > ${wpalock}
+        echo _____pid:$$ wpa reseting @$1
+        fn_wifictl off; fn_wifictl on; fn_wifictl dhcp
+        echo _____pid:$$ wpa reseting @$1 done
+        > $wpalock
+        #fn_ap reset
+        ;;
+    pwr_reset)
+        echo "_____ pwr_reset ap $2"
+        fn_ap off
+        [ sta = "${2}" ] && fn_wifictl off
+        echo 1 > /sys/bus/usb/devices/1-1/remove
+        lsmod | grep -q 8188eu && rmmod -f 8188eu || rmmod -f 8188fu
+        /ipc/drv/airlink/wifi_load.sh
+        sleep .5
+        ifconfig wlan1 up
+        [ sta = "${2}" ] && { fn_wifictl on; fn_wifictl dhcp ;}
+        fn_ap on
+        echo "____ power reset done"
+        ;;
+    step)
+        # [WiFi-Superman](https://zhuanlan.zhihu.com/p/23481790)
+        echo "
+        1 天线：Check antenna
+              2.4G 速度慢，波长长，传输距离长，抗干扰，5G则反之
+        2 功率 dBm = 10log(功率值/1mw)
+              dB是两个量之间的比值，表示两个量间的相对大小，而dBm则是表示功率绝对大小的值
+              在2.4GHz这个频段，设备的最大发射功率不能超过100mw，也就是20dBm。即所有无线设备的上限。
+              20.dBm 100mW
+               0.dBm 1mW，设备靠近路由时
+             -20.dBm 设备离路由0.5m
+             -45.dBm 设备离路由2.5m
+             具体查看信号：iwconfig[Link Quality]
+        3 参数：[iwconfig, ping]
+              传输速率BitRate(54Mb/s)
+              netstat Send-Q
+        4 排除信号干扰: 1.6.11
+        5 COMPLETE?     [lzbox wifictl stat]
+        "
+        ;;
+    dhcp)
+        if [ "${2}" = off ]; then
+            wpa_cli -p ${WLAN0_SUPPLICAN} -i${WLAN} status
+            ps | awk "/[u]dhcpc.*${WLAN}/{print \$1}" |\
+            while read PID; do kill -USR2 $PID; kill -9 $PID; done;
+            rm -f ${PIDFILE}
+            return
+        fi
+        mkdir -p /var/network
+        ps | awk "/[u]dhcpc.*${WLAN}/{print \$1}" |\
+        while read PID; do kill -USR2 $PID; kill -9 $PID; done;
+        udhcpc -i ${WLAN} -p ${PIDFILE} -b -T2 -A3 -R
+        echo "lzbox dhcp: udhcpc -i ${WLAN} -p${PIDFILE} -b -T2 -A3 -R"
+        ;;
+    scan)
+        wpa_cli -p ${WLAN0_SUPPLICAN} -i${WLAN} scan
+        sleep 1
+        wpa_cli -p ${WLAN0_SUPPLICAN} -i${WLAN} scan_result
+        ;;
+    freq)
+        wpa_cli -p ${WLAN0_SUPPLICAN} -i${WLAN} scan
+        sleep 1
+        wpa_cli -p ${WLAN0_SUPPLICAN} -i${WLAN} scan_result | \
+            awk '/\<24/{printf "%4d  %2d  %s\n", $2,($2-2407)/5,$5}' | sort -k2
+        ;;
+    stat)
+        wpa_cli -p ${WLAN0_SUPPLICAN} -i${WLAN} status
+        ;;
+    conf)
+        ccli wificfg -act list
+        echo __configure__: ${SSID_CFG}
+        cat ${SSID_CFG}
+        ;;
+    zconf)
+        [ -f ${SSID_CFG} ] && cp ${SSID_CFG} ${SSID_CFG}.urs
+        fn_new_supplicant_conf
+        # sed -i -e 's/\<ssid=.*/ssid="TP-LINK_FFJCO.zhangj"/' -e 's/\<psk=.*/psk="jabsco123456"/' ${SSID_CFG}
+        fn_echo_succ "reset to connect TP-LINK_FFJCO.${2:-zhangj}, enjoy it!"
+        [ "${2}" = 'ff' ] && sed -i -e 's/.zhangj//g' ${SSID_CFG}
+        ;;
+    zconf2)
+        [ -f ${SSID_CFG} ] && cp ${SSID_CFG} ${SSID_CFG}.urs
+        fn_new_supplicant_conf 2
+        fn_echo_succ "reset to connect TP-LINK_FFJCO.zhangj2, enjoy it!"
+        ;;
+    rmmod)
+        lsmod | grep -q 8188fu && rmmod -f 8188fu
+        ;;
+    insmod)
+        lsmod | grep -q 8188fu && rmmod -f 8188fu
+        /ipc/drv/airlink/wifi_load.sh
+        ;;
+    wifi_list)
+        fn_get_wifilist
+        ;;
+    *)
+        echo "Usage: wifictl {on|off|rm|bc|reset|pwr_reset|step|dhcp[off]|scan|freq|stat|conf|zconf2[ff]|zconf|rmmod|insmod|wifi_list}"
+        ;;
+    esac
+    #done
+    return $?
+}
+fn_adda()
+{
+    # color echo will truncate /tmp/messages, don't use
+    echo "______ cd /proc/adda308"
+    cd /proc/adda308
+    echo "______ LADV"
+    cat LADV
+    echo "______ LDAV"
+    cat LDAV
+    echo "______ LIV"
+    cat LIV
+
+    echo "______ 20  /proc/audio/au_nr_improve"
+    cat /proc/audio/au_nr_improve
+    echo "______ 1:3 /proc/audio/au_nr_dB"
+    cat /proc/audio/au_nr_dB
+}
+
+fn_calc()
+{
+    case $1 in
+    and) echo ${2} ${3}| awk '{ ret=$1; for (i = 2; i <= NF; i++) { ret=and(ret,$i) }; print ret; }'  ;;
+     or) echo ${2} ${3}| awk '{ ret=$1; for (i = 2; i <= NF; i++) { ret=or(ret,$i) }; print ret; }'   ;;
+      *) cmdline="echo | awk '{printf \"%d\n\", ${*} }'"; eval $cmdline                               ;;
+    esac
+}
+
+fn_box()
+{
+    sche=':0,'
+    test -n "${1}" && sche=":2164260863,"
+    echo "\
+    dd if=id.db bs=8 count=1 | hexdump                                  #
+    cat /sys/block/mmcblk0/device/cid
+    ccli mdmbcfg -act set -enable 0
+    ccli devrecordcfg -act set -schedule 0:0,1:0,2:0,3:0,4:0,5:0,6:0,   # 2164260863
+    ccli devrecordcfg -act set -recorden 2                              # stop all record
+    ccli devrecordcfg -act list
+    ccli alarmtest -act set -alarmtype 1
+    ccli sysctrl -act set -cmd 2                                        # reset2default
+    iperf -c 192.168.2.248 -i5 -t50 -b1000M                             #
+    iperf -s               -i5 -t50 -b1000M                             #
+    ccli ircfg -act set -irswitchmode 2 -turnonlux 1                    # day
+    ccli ircfg -act set -irswitchmode 2 -turnonlux 100                  # night
+    ccli ircfg -act set -irswitchmode 2 -turnonlux 50                   # auto
+    mkdir /tmp/v; mount -t nfs -o nolock 192.168.120.1:/opt/video /tmp/v
+    mount -o remount,rw /mnt
+    mount -o remount,ro /mnt
+    route add default gw 192.168.2.1 dev eth0
+    route del -net 10.3.2.0 gw 0.0.0.0 netmask 255.255.255.0 [dev eth0] # netmask必选
+    " | sort -k1 | sed "s/:0,/${sche}/g"
+    echo
+}
+
+fn_nopswd()
+{
+    [ -d /opt/etc ] || mkdir /opt/etc
+    [ -e ${local_rc} ] || touch ${local_rc}
+    case $1 in
+    off)
+        sed -i '/passwd/d' ${local_rc}
+        fn_echo_succ "disable no password logen succ!"
+        ;;
+    *)
+        if ! grep -q passwd ${local_rc}; then
+            nopasswd="cp /etc/passwd /tmp/p; sed -i 's/root:[^:]*/root:/' /tmp/p; mount --bind /tmp/p /etc/passwd"
+            echo ${nopasswd} >> ${local_rc}
+        fi
+        fn_echo_succ "enable no password logen succ, enjoy it!"
+        ;;
+    esac
+}
+
+fn_sysinfo()
+{
+    ccli version -act list; [ "${1}" = v ] && { ccli version -? | tail -3; return ;}
+    ccli sysctrl -act list | sed 's/,/\n/g';
+    cat /ipc/etc/RELEASE
+    ccli toggle -? | tail -3
+}
+
+fn_audiofd()
+{
+    if [ "${1}" = 443 ]; then
+        cat /proc/net/tcp | sed 's/[ :][ :]*/:/g' | awk -F: '/01BB/{ if ($7 == 01) print $15 }' > /tmp/audio.inode
+    else
+        cat /proc/net/tcp | sed 's/[ :][ :]*/:/g' | awk -F: '/3039/{ if ($7 == 01) print $15 }' > /tmp/audio.inode
+    fi
+    PID=`ps | awk '/[j]co_server/{print $1}'`
+    ls -l /proc/$PID/fd | grep -f /tmp/audio.inode | awk '{print $9}'
+}
+
+fn_tag()
+{
+    touch ${local_rc}
+    chmod +x ${local_rc}
+    case $1 in
+    "test") cmd="touch /tmp/tag.test_ver"; $cmd; echo $cmd >> ${local_rc}   ;;
+    *)      echo "not support tag"                                          ;;
+    esac
+}
+
+fn_gpio_cat()
+{
+    local PIN=${1:-78}
+    [ ! -e "/sys/class/gpio/GPIO$PIN" ] && echo $PIN > /sys/class/gpio/export
+    echo in > /sys/class/gpio/GPIO$PIN/direction
+    cat /sys/class/gpio/GPIO$PIN/value
+}
+
+fn_gpio_put()
+{
+    local PIN=${1:-78}
+    [ ! -e "/sys/class/gpio/GPIO$PIN" ] && echo $PIN > /sys/class/gpio/export
+    echo out > /sys/class/gpio/GPIO$PIN/direction
+    echo ${2:-1} > /sys/class/gpio/GPIO$PIN/value               # high active
+}
+
+fn_aio()
+{
+    case $1 in
+    ig) ccli audiocfg -act set -ingain      ${2}    ;;
+    iv) ccli audiocfg -act set -involume    ${2}    ;;
+    og) ccli audiocfg -act set -outgain     ${2}    ;;
+    ov) ccli audiocfg -act set -outvolume   ${2}    ;;
+    ?)  ccli audiocfg -? ;;
+    esac
+
+    [ -n "${1}" ] && sleep 1.5
+    ccli aio -act list
+}
+
+fn_jzzz()
+{
+    lzbox=jzzz
+    fn_execute "$@"
+}
+
+fn_fat()
+{
+    logger -t udev "lzbox fn_fat catch a plug-out"
+    for p in /mnt; do
+        mountpoint ${p} &&  {
+            fuser -m ${p} | xargs -n1 lsof -p | grep ${p}
+            fuser -m ${p} -k; sleep .5; umount -f ${p};
+            echo "`date`: plug-out $p" >> /opt/log/messages
+        }
+    done
+    return $?
+}
+
+fn_logen()
+{
+    echo "echo ${1:-0} > /tmp/logen" >> ${local_rc}
+}
+
+fn_wlan1()
+{
+    WLAN=wlan1 fn_wifictl $@
+}
+
+fn_vmstat()
+{
+    echo _______________ vmstat ______
+    top -b -n1 > /tmp/top
+    idle=`cat /tmp/top | awk '{ if (NR == 2) { printf "%d" , $8; exit; } }'`
+
+    ps | awk '{if (NR>1 && 0==match($5, "[[]")) print $0}' > /tmp/pids
+    cat /tmp/pids
+    pids=`awk '{print $1}' /tmp/pids`
+    let sum=0
+    for i in ${pids}; do
+        [ -e "/proc/$i/smaps" ] || continue
+        this="`grep Pss /proc/$i/smaps | awk '{total+=$2}; END {print total}'`"
+        echo $i: $this
+        let sum=sum+this
+    done
+
+    echo "App_sum:            $sum"
+    grep -E "(MemFree|Buffers|\<Cached|Slab|KernelStack|PageTables)" /proc/meminfo
+    cat /proc/buddyinfo
+
+    if [ "${idle:-0}" -gt 10 ]; then
+        sed -n '1,3p' /tmp/top
+    else
+        top -b -d3 -n2
+        #toggle code 1014
+    fi
+    date +%F.%T
+}
+
+fn_vm()
+{
+    case $1 in
+    stat|s)  fn_vmstat    ;;
+         x)  pmap -x `ps | awk '/[j]co_server/{print $1}'` | sed '/^[0-9]/d' ;;
+    drop|d)  sync; echo 3 > /proc/sys/vm/drop_caches    ;;
+     cma|c)  cat /sys/class/mstar/msys/dmem    ;;
+         *)  top -n1 | sed -n '1,5p'; free;
+             echo -n "free+buffer+cache: "
+             cat /proc/meminfo | sed -n '2,4p' | awk '{sum=sum+$2} END{print sum}'
+             ;;
+    esac
+}
+
+fn_ap()
+{
+if test -d /ipc/etc/aigo_amr; then
+    case $1 in
+    off)
+        # dhcpd
+        ps | awk '/[u]dhcpd/{print $1}' | while read PID; do kill -9 $PID; done;
+        # release
+        hostapd_cli -i wlan1 all_sta |\
+            awk -F'=' '/dot11RSNAStatsSTAAddress=/{print $2}' |\
+            while read MAC; do
+                hostapd_cli -i wlan1 disassociate $MAC; sleep .1
+            done
+        # hostapd
+        ps | awk '/[h]ostapd/{print $1}' | while read PID; do kill -9 $PID; done;
+        # udhcpd
+        ps | awk '/[u]dhcpd/{print $1}' | while read PID; do kill -9 $PID; done;
+        ;;
+    on)
+		on_apssid=$2
+        ifconfig wlan1 172.25.0.255 up
+        echo "\
+        start 172.25.0.20
+        end 172.25.0.254
+        interface wlan1
+        option  lease 864000
+        option  subnet 255.255.255.0
+        opt     dns     172.25.0.1
+        opt     router  172.25.0.1
+        opt     wins    172.25.0.1
+        option  domain  local
+        option  0x08    01020304        # option 8: cookie server IP addr: 1.2.3.4
+        " | sed 's/^  *//' > /tmp/udhcpd.conf
+        test -f /tmp/hostapd.conf || fn_ap conf $on_apssid
+        hostapd -B /tmp/hostapd.conf
+        udhcpd -fS /tmp/udhcpd.conf&
+        ;;
+ reset)
+		APSSID=$2
+		fn_ap off; fn_ap on $APSSID ;;
+    ls) hostapd_cli -i wlan1 all_sta ;;
+    bc) fn_bestchn ${2}              ;;
+  conf)
+		conf_apssid=$2
+        CHN=`fn_bestchn bc bc`
+       #HALF_MAC=`ifconfig wlan1 | awk -F':' '/HWaddr/{print $6$7}'`
+       #deny_mac_file=/tmp/hostapd.deny
+        HALF_MAC=`ifconfig wlan1 | awk -F':' '/HWaddr/{print $5$6$7}' | tr -d ' '`
+        echo "\
+        interface=wlan1
+        ctrl_interface=/var/run/hostapd
+        driver=nl80211
+        wme_enabled=1
+        ht_capab=[SHORT-GI-20]
+        wpa_pairwise=TKIP
+        ssid=${conf_apssid}
+        channel=${CHN:-11}
+        ieee80211n=1
+        hw_mode=g
+        wpa_group_rekey=86400" | sed 's/^  *//' > /tmp/hostapd.conf
+        echo "${conf_apssid} "
+        ;;
+list|l) ccli wificfg -act list ;;
+show|*)
+        echo "Usage:
+        lzbox ap {ls|on|off|reset|list|show|bc}     # use CHN from /tmp/bc when the file exist
+        "
+        hostapd_cli -i wlan1 all_sta
+        ;;
+    esac
+else
+    case $1 in
+    off)
+        # dhcpd
+        ps | awk '/[u]dhcpd/{print $1}' | while read PID; do kill -9 $PID; done;
+        # release
+        hostapd_cli -i wlan1 all_sta |\
+            awk -F'=' '/dot11RSNAStatsSTAAddress=/{print $2}' |\
+            while read MAC; do
+                hostapd_cli -i wlan1 disassociate $MAC; sleep .1
+            done
+        # hostapd
+        ps | awk '/[h]ostapd/{print $1}' | while read PID; do kill -9 $PID; done;
+        # udhcpd
+        ps | awk '/[u]dhcpd/{print $1}' | while read PID; do kill -9 $PID; done;
+        ;;
+    on)
+        ifconfig wlan1 172.25.0.1 up
+        echo "\
+        start 172.25.0.20
+        end 172.25.0.254
+        interface wlan1
+        option  lease 864000
+        option  subnet 255.255.255.0
+        opt     dns     172.25.0.1
+        opt     router  172.25.0.1
+        opt     wins    172.25.0.1
+        option  domain  local
+        option  0x08    01020304        # option 8: cookie server IP addr: 1.2.3.4
+        " | sed 's/^  *//' > /tmp/udhcpd.conf
+        test -f /tmp/hostapd.conf || fn_ap conf
+        hostapd -B /tmp/hostapd.conf
+        udhcpd -fS /tmp/udhcpd.conf&
+        ;;
+ reset) fn_ap off; fn_ap on ;;
+    ls) hostapd_cli -i wlan1 all_sta ;;
+    bc) fn_bestchn ${2}              ;;
+  conf)
+        CHN=`fn_bestchn bc bc`
+       #HALF_MAC=`ifconfig wlan1 | awk -F':' '/HWaddr/{print $6$7}'`
+       #deny_mac_file=/tmp/hostapd.deny
+        HALF_MAC=`ifconfig wlan1 | awk -F':' '/HWaddr/{print $5$6$7}' | tr -d ' '`
+        echo "\
+        interface=wlan1
+        ctrl_interface=/var/run/hostapd
+        driver=nl80211
+        wme_enabled=1
+        ht_capab=[SHORT-GI-20]
+        wpa_pairwise=TKIP
+        rsn_pairwise=CCMP
+        ssid=HSIPC-${HALF_MAC}
+        wpa_passphrase=12345678
+        channel=${CHN:-11}
+        ieee80211n=1
+        hw_mode=g
+        wpa=2
+        wpa_key_mgmt=WPA-PSK
+        wpa_group_rekey=86400" | sed 's/^  *//' > /tmp/hostapd.conf
+        echo "HSIPC-${HALF_MAC} 12345678"
+        ;;
+list|l) ccli wificfg -act list ;;
+show|*)
+        echo "Usage:
+        lzbox ap {ls|on|off|reset|list|show|bc}     # use CHN from /tmp/bc when the file exist
+        "
+        hostapd_cli -i wlan1 all_sta
+        ;;
+    esac
+fi
+}
+
+fn_dbglist()
+{
+    echo "
+    1 /mnt/ali_dbg.txt  # ali LV_LOG_VERBOSE
+    "
+}
+
+fn_rtl()
+{
+    case $1 in
+    proc) cat /proc/net/rtl8188fu/drv_cfg ;;
+       *) echo "Attention:
+        ieee80211n=1 放在 hw_mode=g 上面
+        " ;;
+    esac
+}
+
+fn_wait_cache_sync()
+{
+    timeout_cnt=5
+
+    while true; do
+        dirty=`awk '/\<Dirty\>/{print $2}' /proc/meminfo`
+        write_back=`awk '/\<Writeback\>/{print $2}' /proc/meminfo`
+        stat=`cat /sys/block/mtdblock*/stat  | awk 'BEGIN{sum=0} {sum+=$9} END{print sum}'`
+
+        echo "dirty: $dirty, write_back: $write_back, stat: $stat"
+
+        let timeout_cnt--
+        [ $timeout_cnt -eq 0 ] && {
+            echo "wait cache sync timeout"
+            break
+        }
+
+        if [ $dirty -gt 0 ] || [ $write_back -gt 0 ] || [ $stat -gt 0 ]; then
+            sync
+            echo "cache not empty, countdown: $timeout_cnt"
+            sleep 1
+            continue
+        else
+            break
+        fi
+    done
+}
+
+fn_wget()
+{
+    if [ -z "${2}" ]; then
+        wget 121.40.104.39:58889/${1} -O - | grep href | sed -e '1,2d'
+        return
+    fi
+    mkdir -p /tmp/bin; cd /tmp/bin;
+    wget 121.40.104.39:58889/${1}
+    chmod +x ${1##*/}; echo "/tmp/bin/${1##*/} Done"
+}
+
+fn_dbg_no_frame()
+{
+    echo __sns; let i=2; while [ $i -ge 1 ];do let i--; cat /proc/umap/mipi_rx;sleep 1; echo ___ ;done;
+    echo __isp; let i=2; while [ $i -ge 1 ];do let i--; cat /proc/umap/isp;sleep 1;echo ___;done;
+    echo __enc; let i=2; while [ $i -ge 1 ];do let i--; cat /proc/umap/venc;sleep 1;echo ___;done;
+    echo __sys; let i=2; while [ $i -ge 1 ];do let i--; cat /proc/umap/sys; sleep 1;echo ___;done;
+}
+
+fn_temp()
+{
+    temp_value=`bspmd.l 0x1102A008  1 | grep -m 1 '^0000:' | awk '{print $2}'`
+    temp_value2=$((0x$temp_value&0x3FF))
+    temperature=`echo | awk -v tt=$temp_value2 '{ printf "%.2f", ( (tt - 127) / 784 ) * 165 - 40 }'`
+    echo "cpu temperature:$temperature"
+}
+
+fn_lzbox()
+{
+    local_rc='/opt/etc/local.rc'
+    lzbox=lzb
+    fn_execute "$@"
+}
+
+fn_${0##*/} $*

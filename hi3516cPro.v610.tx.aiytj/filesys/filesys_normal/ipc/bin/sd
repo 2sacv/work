@@ -1,0 +1,138 @@
+#! /bin/sh
+
+alias sd_list='set --                       \
+    "______ common  _            # " \
+    "mmc m                       # mount
+         u                       # umount
+         f                       # format
+         rw                      # mount RW
+         ro                      # mount RO
+         fsck                    # fsck.fat "\
+    "rec open                    #
+         close                   #
+         list                    # format
+         rw                      # mount RW
+         ro                      # mount RO
+         fsck                    # fsck.fat "\
+    "hack                        # Skills" \
+    "______ jzzz    _            # " \
+    "rescan                      # " \
+    "remove                      # " \
+    "insert                      # " \
+    "present                     # 1 present, 0 removed" \
+    "______ fulh    _            # " \
+    "______ duof    _            # " \
+'
+
+export LD_LIBRARY_PATH=/ipc/lib:/lib:$LD_LIBRARY_PATH
+
+fn_echo_clor() { TEXT="$@"; echo "$FG: ${TEXT}" > /dev/stdout ;}
+fn_echo_fail() { FG=fail fn_echo_clor "$@" ;}   # red
+fn_echo_succ() { FG=succ fn_echo_clor "$@" ;}   # green
+fn_echo_warn() { FG=warn fn_echo_clor "$@" ;}   # yellow
+
+xt_ret()
+{
+    [ "${1}" = "0" ] && return 0
+    echo "${2}"
+    return 1
+}
+
+fn_exe_usage()
+{
+     echo -e "\nUsage:
+     ${0##*/} {id|key} [value:0]       # exec key command
+     "
+}
+
+fn_execute()
+{
+    argv9="$@"
+    argv1=$1
+    case $argv1 in
+    ''|l|-l|--list)
+        fn_exe_usage
+        sd_list
+        local i=0
+        for argv; do
+            printf " %-4s%s\n" $i "$argv"
+            let i++
+        done
+        echo
+        ;;
+    [0-9]|[0-9][0-9])
+        sd_list
+
+        [ $argv1 -ge ${#} ] && \
+        fn_execute --list && fn_echo_fail "  -- fn_execute $1 too big --" && return
+
+        i=0
+        while [ $i -lt $argv1 ]; do shift; let i++; done
+
+        set -- ${1}
+        cmd=$1
+
+        set -- ${argv9}
+        shift
+        fn_${cmd} "${@}"
+        ;;
+    *)
+        sd_list
+        local i=0
+        for argv; do
+            if echo $argv | grep -q "^$argv1" ; then
+                set -- $argv
+                cmd=$1
+                set -- ${argv9}
+                shift
+                fn_${cmd} "${@}"
+                return $?            # avoid _fn_exe_usage_
+            fi
+        done
+        fn_exe_usage
+        ;;
+    esac
+}
+
+fn_mmc()
+{
+    [ -z "${1}" ] && { fn_sd; exit ;}
+    lzbox sdcard $@
+}
+
+fn_sys_jzmmc()
+{
+    echo $1 > ${sys_jzmmc}
+    echo "
+    $1 done
+    "
+}
+
+fn_rescan()  { fn_sys_jzmmc up ; sleep 3; fn_sys_jzmmc off ;}
+fn_remove()  { fn_sys_jzmmc off ;}
+fn_insert()  { fn_sys_jzmmc up ;}
+fn_present() { cat ${sys_jzmmc}    ;}
+
+fn_rec()
+{
+    close=0:0,1:0,2:0,3:0,4:0,5:0,6:0,
+    h24=':2164260863,'
+    open=${close//:0,/${h24}}
+    case $1 in
+    l|list)  ccli devrecordcfg -act list                 ;;
+    o|open)  echo devrecordcfg -act set -schedule $open
+             ccli devrecordcfg -act set -schedule $open  ;;
+    c|close) echo devrecordcfg -act set -schedule $close
+             ccli devrecordcfg -act set -schedule $close ;;
+    *)       fn_sd ;;
+esac
+
+}
+
+fn_sd()
+{
+    sys_jzmmc='/sys/class/mmc_host/mmc0/card_present'
+    fn_execute "$@"
+}
+
+fn_${0##*/} $*

@@ -1,0 +1,114 @@
+#!/bin/sh
+
+set -a # all env_var export to sub-shell
+
+PATH=/bin:/usr/bin:/sbin:/usr/sbin
+ROUTE=/sbin/route
+LOGGER="/bin/logger -t udhcpc"
+RESOLV_CONF="/etc/resolv.conf"
+factest='/mnt/factest.txt'      # wireless priority Frist
+ip_file='/mnt/wifi_ip.txt'
+wlan_gw="/tmp/wlan_gw"
+eth0_gw="/tmp/eth0_gw"
+
+eth_running()
+{
+    # /sys/class/net/eth0/operstate will got unknow STATUS
+    ifconfig eth0 | grep RUNNING
+}
+
+update_interface()
+{
+    [ -n "$broadcast" ] && BROADCAST="broadcast $broadcast"
+    [ -n "$subnet" ] && NETMASK="netmask $subnet"
+
+    ifconfig $interface $ip $BROADCAST $NETMASK
+    $LOGGER "ifconfig $interface IP $ip $BROADCAST $NETMASK"
+}
+
+fn_degrade_route()
+{
+    eth0_ip=`ifconfig | grep -r eth0 -A 1 | grep -r inet| awk '{print $2}' | awk -F: '{print $2}'`
+    eth0_route=${eth0_ip%.*}
+    wlan_route=${router%.*}
+
+    [ "${eth0_route}" != "${wlan_route}" ] && return
+
+    # wifi && !eth0 需要删除默认路由, 以防 wifi 路由和默认路由在同一网段导致上不了网
+    gw=${eth0_ip%.*}.1
+    route del default gw $gw dev eth0
+
+    dot3=`echo ${eth0_ip} | awk -F. '{print $3}'`
+    let dot3+=1
+    newip="${eth0_route%.*}.$dot3.${eth0_ip##*.}" 
+
+    ifconfig eth0 ${newip}
+}
+
+update_routes()
+{
+    [ -z "$router" ] && $LOGGER "zero router, exit" && exit 0
+
+    if [ -f ${factest} ] && [ "${interface}" = eth0 ]; then
+        $LOGGER "factest skip eth0 router" && exit 0
+    fi
+
+    $LOGGER "$interface router: $router"
+    touch $eth0_gw $wlan_gw
+    while $ROUTE del default gw 0.0.0.0 dev $interface 2>/dev/null; do :; done
+    
+    [ "${interface}" != "eth0" ] && fn_degrade_route
+
+    for i in $router; do
+        $ROUTE add default gw $i dev $interface metric 0
+        [ "${interface}" != "eth0" ] && echo $i>$wlan_gw || echo $i>$eth0_gw
+    done
+}
+
+# https://alidocs.dingtalk.com/i/nodes/dpYLaezmVNqxGqqgcQ23dAROWrMqPxX6
+update_dns()
+{
+    $LOGGER "$interface update dns: $dns @${domain}"
+    {
+        echo nameserver 223.5.5.5
+        echo nameserver 8.8.8.8
+        for i in $dns; do
+            echo nameserver $i
+        done
+    } > $RESOLV_CONF
+}
+
+fn_main()
+{
+    if [ "${interface}" != "eth0" ] && [ -f ${factest} ] && [ -f ${ip_file} ]; then
+         ip=`awk 'NR==1 {print $1}' ${ip_file}`
+    fi
+
+    case "$1" in
+    bound|renew)
+        $LOGGER "$interface dhcp $1"
+        update_interface
+        if [ ! -f ${factest} ] && [ "${interface}" != "eth0" ] && eth_running; then
+            $LOGGER "ignore ${interface} ROUTER when eth0 is up"; exit 0
+        fi
+        update_routes
+        update_dns
+        [ "${1}" = "bound" ] && timeout 3 /ipc/bin/ccli \
+            dhcpnotify -act set -result success -interface $interface -ip $ip
+        ;;
+    leasefail|nak|deconfig)
+        echo "ignore command: $interface $1"
+        echo "$interface $1"
+        ;;
+    *)
+        echo "non-recognized commnd $1"
+        ;;
+    esac > /tmp/dhcp.log 2>&1
+
+    [ -f /tmp/test.net ] && cat /tmp/dhcp.log >>/tmp/messages || cat /tmp/dhcp.log >/dev/console
+    rm -f /tmp/dhcp.log
+    exit 0
+}
+
+set -x
+fn_main $1

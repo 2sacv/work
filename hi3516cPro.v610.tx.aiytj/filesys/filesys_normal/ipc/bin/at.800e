@@ -1,0 +1,353 @@
+#! /bin/sh
+
+fn_safe_sim_on()
+{
+    fn_cfun_off
+    AT AT+QDSIM=$1; sleep 1
+    fn_cfun_on;
+    fn_AT3_okey; sleep .5
+}
+
+fn_sim_ready()
+{
+    ready=0
+    for i in 1 2 3; do
+        AT AT+CPIN? t
+        grep -q READY ${TEE}
+        [ "${?}" -eq 0 ] && ready=1 && break
+        sleep 1
+    done
+    AT AT+CSQ t
+    echo ${ready} > $f_ready
+}
+
+fn_ccid_flush()
+{
+    fn_at_expect AT+QCCID 'QCCID:' 2
+    xt_ret $? "ccid fail" || return $?
+    test -n "$1" && awk '/CCID/{print $2}' $TEE > $1
+}
+
+fn_detect_sim1()
+{
+    if [ ! -s "$f_esim_iccid" ]; then
+        fn_safe_sim_on 1
+        fn_echo_succ "detect sim1"
+        for i in 1 2; do
+            fn_ccid_flush ${f_esim_iccid} && return 0
+            echo "ERR_SIM i=$i"
+        done
+
+        return 1
+    fi
+}
+
+fn_detect_sim2()
+{
+    fn_safe_sim_on 2
+    fn_echo_succ "detect sim2"
+    for i in 1 2; do
+        fn_ccid_flush ${f_iccid} && echo 0 > $f_inside_sim && return 0
+        echo "ERR_SIM i=$i"
+    done
+
+    # reset
+    fn_echo_fail "detect_outside_sim TRY power reset"
+    fn_drv_reset
+    fn_AT3_okey
+    fn_ccid_flush ${f_iccid} && echo 0 > $f_inside_sim && return 0
+}
+
+fn_detect_dual_sim()
+{
+    # switch
+    if [ ! -e "${f_inside_sim}" ]; then
+        fn_detect_sim2
+        fn_detect_sim1 && echo 1 > $f_inside_sim
+    fi
+}
+
+fn_set_dial_mode()
+{
+    # 1 ECM, 3 RNDIS, init 后默认 ECM
+    AT 'AT+QCFG="usbnet"' t
+    grep -q usbnet..1 ${TEE}
+    if [ "${?}" -ne 0 ]; then
+        AT 'AT+QCFG="usbnet",1'
+        sleep 5;
+        AT 'AT+QCFG="usbnet"' t
+        grep -q usbnet..1 ${TEE}
+        xt_ret $? "ERR_ECM" || return $?
+
+        # usbnet reset to take effect
+        fn_drv_reset
+        fn_AT3_okey
+        fn_cfun_on
+        fn_AT3_okey
+        AT AT+CMEE=1
+    fi
+
+    fn_echo_succ "SUCC_ECM"
+}
+
+fn_autocall()
+{
+    fn_cfun_on
+    # type=3,autocall cid=1 URC_en=0 禁用 URC 上报
+    AT AT+QNETDEVCTL=3,1 t
+    grep -q OK ${TEE} || AT AT+QNETDEVCTL=3,1
+
+    # todo2, no CGACT, will block 150 sec
+    for i in 2 1 2 1; do
+        # <n,STAT>: 0,noStation 1,oK 2,trying 3,refused
+        sleep $i; AT AT+CEREG? t
+        grep -q 0.1 $TEE && return 0
+    done
+
+    fn_echo_fail "ERR_ACT"
+    return 0
+}
+
+# NT26 head a L on NT35
+fn_iccid_imei_imsi()
+{
+    logger -t _4g_ iccid_imei_imsi
+
+    if [ ! -s ${f_imei} ]; then
+        fn_at_expect AT+CGSN=1 'CGSN:'
+        awk -F'"' '/[0-9][0-9][0-9]/{print $2}' $TEE > ${f_imei}
+        test -s ${f_imei}
+        xt_succ $? "IMEI"
+    else
+        cat ${f_imei}
+    fi
+
+    # iccid, 采集数据交给双卡检测，兼容单卡，逻辑由 C 代码处理
+
+    # todo1
+    fn_at_expect AT+CIMI '[0-9][0-9][0-9]'
+    awk '/[0-9][0-9][0-9]/{print $1}' $TEE > ${f_imsi}
+    test -s ${f_imsi}
+    xt_succ $? "IMSI"
+}
+
+fn_pwr()
+{
+    case ${1:-on} in
+    off) fn_gpio 4g off; sleep 5 ;; # 经实测保持下电 5s，以电容放完电
+    on)  fn_gpio 4g on;  sleep 3 ;; # 保持上电后，系统启动
+    *)   echo invalid [$1] ;;
+    esac
+}
+
+#
+# stop before updating
+#
+fn_rmmod()
+{
+    ps | awk "/[u]dhcpc.*usb0/{print \$1}" | while read PID; do kill -USR2 $PID; kill -9 $PID; done
+
+    # cdc_acm 1-1:1.2: acm_port_activate - usb_submit_urb(ctrl irq) failed, may block [ifconfig usb0 down]
+    # ifconfig usb0 down
+    echo 1 > /sys/bus/usb/devices/1-1/remove
+    sleep 2
+    echo "rmmod -f usb driver"
+    rmmod -f /ipc/drv/usb/option.ko
+    rmmod -f /ipc/drv/usb/usb_wwan.ko
+    rmmod -f /ipc/drv/usb/rndis_host.ko
+    rmmod -f /ipc/drv/usb/cdc_ether.ko
+    #lsmod
+    fn_echo_succ "stop 4g succ"
+}
+
+fn_insmod()
+{
+    insmod /ipc/drv/usb/cdc_ether.ko
+    insmod /ipc/drv/usb/rndis_host.ko
+    insmod /ipc/drv/usb/usb_wwan.ko
+    insmod /ipc/drv/usb/option.ko
+
+    let count=0
+	USB_IDVENDOR="/sys/bus/usb/devices/1-1/idVendor"
+
+	while [ ! -f $USB_IDVENDOR ] && [ $count -lt 5 ]; do
+        let count++;
+        sleep 1
+        echo "wait @partion_adding $count"
+    done
+    ls /dev/ttyUSB*
+    ln -sf /dev/ttyUSB2 /dev/tty4G
+}
+
+fn_drv_reset()
+{
+    fn_rmmod
+    fn_pwr off
+    fn_pwr on
+    fn_insmod
+}
+
+fn_hwstat_ok()
+{
+    lsmod
+    ifconfig usb0
+    ps | grep -v ' \['
+    ls   -l /dev/tty[AU]*[012]
+    test -e /dev/tty4G || ln -sf /dev/ttyUSB2 /dev/tty4G
+    test -e /dev/ttyUSB2
+    _code0=$?
+    xt_succ $_code0 "tty4G"
+
+    test -e $USB_IDVENDOR
+    _code1=$?
+    xt_succ $_code1 "idVendor"
+
+    if [ $_code0 = 0 ] && [ $_code1 = 0 ]; then
+        echo 1 > ${f_hwstat_ok}
+        return 0
+    else
+        echo 0 > ${f_hwstat_ok}
+        return 1
+    fi
+}
+
+fn_soft_reboot()
+{
+    # AT AT+LRST # probobely release RESOURCE fail
+    # cdc_acm 1-1:1.2: acm_port_activate - usb_submit_urb(ctrl irq) failed
+    # cdc_acm 1-1:1.3: acm_start_wb - usb_submit_urb(write bulk) failed: -19
+    fn_cfun_off; fn_AT3_okey
+    fn_cfun_on ; fn_AT3_okey
+}
+
+#
+# include CFUN=0,1
+#
+fn_fly_reset()
+{
+    fn_echo_succ "fly_reset"
+
+    fn_soft_reboot
+    fn_set_dial_mode
+}
+
+fn_fun_reset()
+{
+    echo "start ec800e fun_reset"
+    fn_cfun_off;
+    fn_cfun_on;
+
+    fn_autocall
+    fn_udhcpc
+}
+
+fn_at_init()
+{
+    try_cnt=3
+
+    while [ ${try_cnt} -gt 0 ]; do
+        AT AT
+        if [ $? -eq 0 ]; then
+            break;
+        else
+            echo "AT AT fail, try again"
+        fi
+        let try_cnt--
+    done
+
+    AT AT+CFUN=0
+    AT ATI t
+    AT AT+CMEE=1
+    AT ATE0
+    AT 'AT&W'
+    # check sim 卡 & 支持热插拔检查，AT+QSIMSTAT=1 设定 QSIMSTAT? 电平，但为加快启动，弃用
+    AT AT+QSIMDET=1,0
+    echo "fn_at_init success"
+}
+
+fn_sig()
+{
+    case ${1:-0} in
+        fdd) AT AT+QCFG="BAND",0,95 ;;
+        1)      AT AT+QCFG="BAND",0,1             ;;
+        3)      AT AT+QCFG="BAND",0,4             ;;
+        5)      AT AT+QCFG="BAND",0,10            ;;
+        8)      AT AT+QCFG="BAND",0,80            ;;
+        tdd) AT AT+QCFG="BAND",0,1e200000000      ;;
+        34)     AT AT+QCFG="BAND",0,200000000     ;;
+        38)     AT AT+QCFG="BAND",0,2000000000    ;;
+        39)     AT AT+QCFG="BAND",0,4000000000    ;;
+        40)     AT AT+QCFG="BAND",0,8000000000    ;;
+        41)     AT AT+QCFG="BAND",0,10000000000   ;;
+        all) AT AT+QCFG="BAND",0,7FFFFFFFFFFFFFFF  ;;
+    ls)
+        echo '
+        fdd) AT AT+QCFG="BAND",0,95
+        1)   AT AT+QCFG="BAND",0,1
+        3)   AT AT+QCFG="BAND",0,4
+        5)   AT AT+QCFG="BAND",0,10
+        8)   AT AT+QCFG="BAND",0,80
+        tdd) AT AT+QCFG="BAND",0,1e200000000
+        34)  AT AT+QCFG="BAND",0,200000000
+        38)  AT AT+QCFG="BAND",0,2000000000
+        39)  AT AT+QCFG="BAND",0,4000000000
+        40)  AT AT+QCFG="BAND",0,8000000000
+        41)  AT AT+QCFG="BAND",0,10000000000
+        all) AT AT+QCFG="BAND",0,7FFFFFFFFFFFFFFF
+        '
+        AT AT+QCFG="BAND"
+        ;;
+    i)
+        AT AT+QENG="servingcell" | awk -F',' '/QENG:/{
+        printf " band:%6s\n PCI :%6s\n RFCN:%6s\n sinr:%6s %d\n rssi:%6s %d\n rsrp:%6s %d\n",
+            $(NF-8), $(NF-10), $(NF-9), 
+            $(NF-1), 100*($(NF-1)+20)/60,
+            $(NF-2), 100*($(NF-2)+120)/95,
+            $(NF-4), 100*($(NF-4)+156)/112
+        }'
+        AT AT+CSQ | awk  -F'[ ,]' '/CSQ:/{printf " csq :%6s %d\n", $2, 100*$2/31 }'
+        ;;
+    *) echo "
+        tdd 1  3  5  8
+        fdd 34 38 39 40 41
+        all
+        i   info of band selectd and CSQ SINR RSRP   百分制
+        ls  list of band setting
+       "
+    esac
+}
+
+fn_env_init()
+{
+    # 尝试拉起3次usb0
+    for i in 1 2 3; do
+        ifconfig usb0 up; sleep $i; ifconfig | grep -q usb0
+        code=$?
+        [ "${code}" -eq 0 ] && break
+        if [ "${i}" -ge 3 ]; then
+            xt_ret $code "ERR_USB0DOWN" || return $?
+        fi
+    done
+
+    #  AT & close ECHO & CSQ signal
+    fn_AT3_okey
+    xt_ret $? "fn_AT3_fail" || return $?
+
+    AT ATI t
+    awk -F ': ' '/Revision/{print $2}' ${TEE} > ${f_ATI}
+    grep -q EC801E ${f_ATI}
+    if [ $? -ne 0 ]; then
+        AT AT+CMEE=1
+    fi
+    AT AT+CSQ
+    AT ATE0
+    AT 'AT&W'
+
+    # check sim 卡 & 支持热插拔检查，AT+QSIMSTAT=1 设定 QSIMSTAT? 电平，但为加快启动，弃用
+    AT AT+QSIMDET=1,0
+
+    echo "dual-card"
+    fn_detect_dual_sim
+    fn_iccid_imei_imsi
+    fn_set_dial_mode
+}

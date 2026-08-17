@@ -1,0 +1,134 @@
+html,body{
+overflow:hidden;
+height:100%;
+margin:0;
+padding:0;
+font-size:12px;
+}
+html{
+_padding:110px 0;
+}
+.hd{
+position:absolute;
+top:0;
+left:0;
+width:100%;
+height:85px;
+background:rgb(170,176,184);
+}
+.bd{
+position:absolute;
+top:85px;
+right:0px;
+bottom:0px;
+left:0px;
+overflow:hidden;
+width:100%;
+_height:100%;
+background:rgb(178,184,0);
+}
+.side{
+position:absolute;
+top:0;
+left:0;
+bottom:0;
+overflow:auto;
+width:275px;
+_height:100%;
+background:rgb(169,175,183);
+}
+.main{
+position:absolute;
+_position:static;
+top:0;
+right:0;
+bottom:0;
+left:275px;
+overflow:auto;
+_overflow:hidden;
+_height:100%;
+_margin-left:275px;
+background:#666;
+}
+.hd img{
+  margin-top:8px;
+}
+.side .banner span
+{
+    margin: 0px;
+    padding: 0px;
+    width:42px;
+    height:47px;
+    float:left;
+    font-size: 12px;
+    color: black;
+    display：block;
+    text-align:center;
+    border:1px solid rgb(169,175,183);
+}
+.side .banner  span img{padding:3px;}
+.side .banner  span:hover{
+    background: rgb(249,210,138);
+    border:1px solid black;
+}
+.active{
+    background: rgb(252,173,90);
+    border:1px solid black;
+}
+.main .icon-banner{
+  position:absolute;
+  _position:static;
+  right:0;
+  bottom:0;
+  width:100%;
+  overflow:auto;
+  _overflow:hidden;
+  height:40px;
+  background:rgb(183,188,195);
+}
+.main .icon-banner *{vertical-align:middle;}
+.main .video{
+  position:absolute;
+  _position:static;
+  top:0;
+  right:0;
+  bottom:40px;
+  width:100%;
+  overflow:auto;
+  _overflow:hidden;
+  _height:100%;
+  background:black;
+}
+.imageSlider
+{ 
+  margin:0;
+  padding:0; 
+  height:13px; 
+  width:100%;
+  background-image:url("../image/slider_bar.png"); 
+  background-repeat:repeat-x; 
+}
+.imageBar   
+{   
+  margin:0;
+  padding:0; 
+  height:13px; 
+  width:10px; 
+  background-image:url("../image/slider_speed.png"); 
+  background-repeat:no-repeat;
+}
+.ptz_tab{
+  height:25px;
+  width:274px;
+  background:rgb(191,196,202);
+  line-height: 25px;
+  text-align: center;
+  vertical-align: middle;
+  margin-bottom: 2px;
+}
+.ptz_tab *{
+  vertical-align: middle;
+}
+.divTab{
+  border:1px solid #666;
+}

@@ -1,0 +1,19 @@
+#! /bin/sh
+
+set -x
+
+touch /tmp/sdboot
+ps | grep "auto_run.sh" | awk 'NR==1{print $1;}' | xargs kill -9
+sleep .5; ps
+cd /    ; umount -f /ipc
+
+test  -f /mnt/ipcfs.sqfs || sleep .5
+test  -f /mnt/ipcfs.sqfs || sleep 2
+mount -t squashfs /mnt/ipcfs.sqfs /ipc
+test  -f /ipc/etc/auto_run.sh || sleep 1
+
+set +x
+
+/ipc/etc/auto_run.sh
+
+sleep 2000

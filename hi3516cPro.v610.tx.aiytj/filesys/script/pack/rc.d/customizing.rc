@@ -1,0 +1,190 @@
+#! /bin/sh
+
+
+function fn_vendor()
+{
+    if [ "${KESHIAN}" = 1 ]; then
+        fn_echo_succ "keshian"		
+        fn_ipc_effect keshian
+        xt_ret $? "" || return $?
+		
+        echo "asdsadasdsadsadsadsadsadasd"
+        ui_post=".keshian"
+        ui_ver="KESHIAN"
+    fi
+
+    if [ "${ZXWY}" = 1 ]; then
+        echo "___ zxwy"
+        ui_post=".zxwy"
+        ui_ver="ZXWY"
+        fn_ipc_effect zxwy
+    fi
+
+    if [ "${STJT}" = 1 ]; then
+        fn_echo_succ "stjt"
+        (cd $dir_webpage/image/ && cp logo_neutral.png logo.png)
+        xt_ret $? "cp logo.png fail" || return $?
+
+        ${xparser} -i -c w -k /cfg/lightextcfg/devtype                  -v 0  $xmlfile && \
+        ${xparser} -i -c w -k /cfg/lightextcfg/irswitchmode             -v 1  $xmlfile
+        xt_ret $? "" || return $?
+ 
+        cat <<-"HERE" >${vec_1296p}
+		1 /cfg/videoEncode/enclist/encode/codec       7
+		1 /cfg/videoEncode/enclist/encode/vencsize    5
+		1 /cfg/videoEncode/enclist/encode/bps         2048
+		1 /cfg/videoEncode/enclist/encode/fps         25
+		1 /cfg/videoEncode/enclist/encode/gop         100
+		2 /cfg/videoEncode/enclist/encode/codec       7
+		2 /cfg/videoEncode/enclist/encode/vencsize    7
+		2 /cfg/videoEncode/enclist/encode/bps         512
+		2 /cfg/videoEncode/enclist/encode/fps         15
+		2 /cfg/videoEncode/enclist/encode/gop         60
+		HERE
+
+        ui_post=".stjt"
+        ui_ver="STJT"
+    fi
+
+    if [ "${STJT_D}" = 1 ]; then
+        fn_echo_succ "stjt-dhcp"
+        (cd $dir_webpage/image/ && cp logo_neutral.png logo.png)
+        xt_ret $? "cp logo.png fail" || return $?
+
+        ${xparser} -i -c w -k /cfg/lightextcfg/devtype              -v 0            $xmlfile  && \
+        ${xparser} -i -c w -k /cfg/lightextcfg/irswitchmode         -v 1            $xmlfile
+        xt_ret $? "" || return $?
+
+        ${xparser} -i -c w -k /cfg/eth/ipadaen                      -v 0            $xmlfile  && \
+        ${xparser} -i -c w -k /cfg/eth/dhcpen                       -v 1            $xmlfile  && \
+        ${xparser} -i -c w -k /cfg/eth/ip                           -v 10.1.1.217   $xmlfile  && \
+        ${xparser} -i -c w -k /cfg/eth/mask                         -v 255.0.0.0    $xmlfile  && \
+        ${xparser} -i -c w -k /cfg/eth/gw                           -v 10.1.1.1     $xmlfile
+        xt_ret $? "" || return $?
+
+        cat <<-"HERE" >${vec_1296p}
+		1 /cfg/videoEncode/enclist/encode/codec       7
+		1 /cfg/videoEncode/enclist/encode/vencsize    5
+		1 /cfg/videoEncode/enclist/encode/bps         2048
+		1 /cfg/videoEncode/enclist/encode/fps         25
+		1 /cfg/videoEncode/enclist/encode/gop         100
+		2 /cfg/videoEncode/enclist/encode/codec       7
+		2 /cfg/videoEncode/enclist/encode/vencsize    7
+		2 /cfg/videoEncode/enclist/encode/bps         512
+		2 /cfg/videoEncode/enclist/encode/fps         15
+		2 /cfg/videoEncode/enclist/encode/gop         60
+		HERE
+
+        ui_post=".stjt-dhcp"
+        ui_ver="STJT-DHCP"
+    fi
+
+    if [ "${ABRS}" = 1 ]; then
+        fn_echo_succ "abrs"
+        
+        ui_post=".abrs"
+        ui_ver="ABRS"
+    fi
+
+    if [ "${TT}" = 1 ]; then
+        fn_echo_succ "tt卓伟视讯"
+
+        fn_echo_succ "customize logo.png..."
+        (cd $dir_webpage/image/ && cp logo_neutral.png logo.png)
+        xt_ret $? "cp logo.png fail" || return $?
+
+        ${xparser} -i -n 1 -c w -k /cfg/videoEncode/enclist/encode/codec     -v 2              $xmlfile && \
+        ${xparser} -i -n 2 -c w -k /cfg/videoEncode/enclist/encode/codec     -v 2              $xmlfile && \
+        ${xparser} -i -c w -k /cfg/videoEncode/enclist/encode/vencsize       -v 5              $xmlfile && \
+        ${xparser} -i -c w -k /cfg/eth/ipadaen           -v 0              $xmlfile && \
+        ${xparser} -i -c w -k /cfg/audioIn/enable        -v 0              $xmlfile && \
+        ${xparser} -i -c w -k /cfg/osdinfo/timeen        -v 0              $xmlfile && \
+        ${xparser} -i -c w -k /cfg/osdinfo/bpsen         -v 0              $xmlfile && \
+        ${xparser} -i -c w -k /cfg/osdinfo/nameen        -v 0              $xmlfile && \
+        ${xparser} -i -c w -k /cfg/osdinfo/gpsen         -v 0              $xmlfile
+        xt_ret $? "" || return $?
+
+        fn_opt_ip 192.168.3.200
+        xt_ret $? "" || return $?
+
+        vec_1920p=${dir_filesys}/opt/conf/factory.kep.pair.1920p
+		cat <<-"HERE" >${vec_1920p}
+		1 /cfg/videoEncode/enclist/encode/codec       2
+		1 /cfg/videoEncode/enclist/encode/vencsize    5
+		1 /cfg/videoEncode/enclist/encode/bps         2048
+		1 /cfg/videoEncode/enclist/encode/fps         25
+		1 /cfg/videoEncode/enclist/encode/gop         100
+		2 /cfg/videoEncode/enclist/encode/codec       2
+		2 /cfg/videoEncode/enclist/encode/vencsize    7
+		2 /cfg/videoEncode/enclist/encode/bps         512
+		2 /cfg/videoEncode/enclist/encode/fps         15
+		2 /cfg/videoEncode/enclist/encode/gop         90
+		HERE
+
+        ui_post=".tt"
+        ui_ver="TT"
+        
+        ui_post=".tt"
+        ui_ver="TT"
+    fi
+
+    if [ "${HBFN}" = 1 ]; then
+         fn_echo_succ "customize hbfn汉邦富尼"
+        
+         ${xparser} -i -c w -k /cfg/eth/ipadaen                          -v 1       $xmlfile && \
+         ${xparser} -i -c w -k /cfg/devinfo/devname                      -v HDIPCAM $xmlfile && \
+         ${xparser} -i -c w -k /cfg/devinfo/devtype                      -v IPCAM   $xmlfile && \
+         ${xparser} -i -c w -k /cfg/osdinfo/name                         -v HDIPCAM $xmlfile && \
+         ${xparser} -i -c w -k /cfg/vmaskalarm/enable                    -v 0       $xmlfile && \
+         ${xparser} -i -c w -k /cfg/motionDetect/enable                  -v 0       $xmlfile && \
+         ${xparser} -i -c w -k /cfg/humanDetect/enable                   -v 0       $xmlfile && \  
+         ${xparser} -i -c w -k /cfg/humanDetect/screenenable             -v 0       $xmlfile && \  
+         ${xparser} -i -c w -k /cfg/aliconf/enable                       -v 0       $xmlfile
+         xt_ret $? "" || return $?
+         
+         sed -i '/cfg.devinfo.devname/d' ${factkep}
+         sed -i '/cfg.devinfo.devtype/d' ${factkep}
+         sed -i '/cfg.osdinfo.name/d' ${factkep}
+         sed -i '/cfg.humanDetect.enable/d' ${factkep}
+         sed -i '/cfg.humanDetect.screenenable/d' ${factkep}
+
+         fn_opt_user_passwd admin 123456
+         xt_ret $? "" || return $?
+         fn_opt_ip 192.168.0.123
+         xt_ret $? "" || return $?
+        
+         ui_post=".hbfn"
+         ui_ver="HBFN"
+    fi
+}
+
+function fn_feature()
+{
+    if [ "${NO_IPADAPTER}" = 1 ]; then
+        ${xparser} -i -c w -k /cfg/eth/ipadaen -v 0 $xmlfile
+        echo "1 /cfg/eth/ipadaen" >> ${upgrad_mod}
+    fi
+
+    if [ "${ENGLISH}" = 1 ]; then
+        echo __________ ENGLISH=1
+        fn_opt_user_english
+        ui_post=".gen"
+        ui_ver="GENENG"
+        web_language="en"
+    fi
+
+    if [ "${HMY}" = 1 ]; then
+        fn_echo_succ "customize hmy华铭阳"
+        fn_opt_user_english
+        ui_post=".gen"
+        ui_ver="GENENG"
+        web_language="en"
+    fi
+}
+
+function fn_customizing()
+{
+    fn_feature
+    fn_vendor
+}
+

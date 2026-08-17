@@ -1,0 +1,46 @@
+.btn-black:hover,
+.btn-black:focus,
+.btn-black:active{
+  background: #0d75a7;
+}
+#master_span,#slave_span{color: white;}
+#bottom_img{width:90%;height:35px;float:left;background:#0d0d0e;margin-left: 5%;}
+
+.btn-black{ 
+    width:168px; 
+    height:50px;font-size: 18px;text-align: center;
+    background: url("../image/bg_tab_btn_bottom2.png");
+}
+
+.btn-black:hover,
+.btn-black:focus,
+.btn-black:active{
+  border:1px solid #26b3f7;
+  background:#0972a5 url(/css/images/ui-bg_highlight-hard_20_0972a5_1x100.png) 50% 50% repeat-x;
+  font-weight:normal;color:#fff;outline:none;
+}
+
+.base_action{border:1px solid #212121;background:#303030;margin:8px;}
+
+.speed{margin-left:5px;color:white;}
+.speed .label{margin-left:10px;font-size: 12px;width:30px;display:inline-block;}
+.speed .slider{width:120px;display:inline-block;font-size:10px;margin-left:5px}
+.speed span.value{padding:5px}
+
+.action .group_line{text-align:center;margin-top:5px;font-size:12px}
+.ptz_button{
+	border:1px solid #444;height:30px;
+	background:#222 url(/css/images/ui-bg_highlight-soft_35_222222_1x100.png) 50% 50% repeat-x;
+	font-weight:normal;color:#eee;outline:none;
+}
+.ptz_button:hover{
+    border:1px solid #26b3f7;height:30px;
+    background:#0972a5 url(/css/images/ui-bg_highlight-soft_33_003147_1x100.png) 50% 50% repeat-x;
+    font-weight:normal;color:#fff;outline:none;
+}
+.ptz_button_active{
+    border:1px solid #26b3f7;height:30px;
+    background:#0972a5 url(/css/images/ui-bg_highlight-hard_20_0972a5_1x100.png) 50% 50% repeat-x;
+    font-weight:normal;color:#fff;outline:none;
+}
+.action .group_line .wiper{width:60px;}

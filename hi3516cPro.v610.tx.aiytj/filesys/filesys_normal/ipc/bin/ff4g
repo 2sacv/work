@@ -1,0 +1,6 @@
+#! /bin/sh
+
+mountpoint /mnt && touch /tmp/ff4g.log && cat /tmp/ff4g.log >> /mnt/ff4g.log
+test -f band4g && cmd4g='./band4g' 
+FF=1 OUT=${OUT:-/tmp/ff4g.log} ${cmd4g:-/ipc/bin/band4g} $@ &
+

@@ -1,0 +1,39 @@
+/dts-v1/;
+
+/ {
+	description = "Linux Kernel";
+	#address-cells = <1>;
+
+	images {
+
+		linux_kernel {
+			description = "Linux";
+			data = /incbin/("./Image");
+			type = "kernel";
+			arch = "arm";
+			os = "Linux";
+			compression = "none";
+			load = <0x40008000>;
+			entry = <0x40008000>;
+		};
+
+		fdt-1 {
+			description = "dtb";
+			data = /incbin/("./devicetree.dtb");
+			type = "flat_dt";
+			arch = "arm";
+			compression = "none";
+			load = <0x40000000>;
+		};
+
+	};
+
+	configurations {
+		default = "config-1";
+		config-1 {
+			description = "Linux";
+			kernel = "linux_kernel";
+			fdt = "fdt-1";
+		};
+	};
+};

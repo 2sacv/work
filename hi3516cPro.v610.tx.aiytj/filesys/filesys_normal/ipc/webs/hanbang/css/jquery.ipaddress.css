@@ -1,0 +1,22 @@
+.ip_container {
+  background:white;
+  width:180px;
+  text-align:center;
+  overflow:hidden;
+  border-style:solid;
+  border-width:1px;
+  border-color:#222;
+  padding:1 1 1 1;
+  font-family: Trebuchet MS,Tahoma,Verdana,Arial,sans-serif;
+  font-size: 1em;
+}
+.ip_octet {
+  border: 0;
+  text-align: center;
+  width: 40px;
+  background:white;
+  color:black;
+}
+.ip_cidr {
+  width: 1.5em;
+}

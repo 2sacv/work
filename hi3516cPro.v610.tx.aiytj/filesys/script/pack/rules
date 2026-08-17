@@ -1,0 +1,8 @@
+#! /bin/bash
+
+TOPDIR=${PWD}
+local_image="$TOPDIR/../../images/Base"
+local_filesys="$TOPDIR/../../filesys_normal"
+local_uptools="$TOPDIR/../../script/upTools"
+local_newweb="$TOPDIR/../../filesys_normal/ipc/webs"
+local_kernel="$TOPDIR/../../../kernel/kernel"

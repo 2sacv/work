@@ -1,0 +1,49 @@
+io_sim1=    on_sim1=1    off_sim1=0
+io_sim2=    on_sim2=0    off_sim2=1
+io_4g=57    on_4g=1     off_4g=0
+io_wifi=57  on_wifi=1   off_wifi=0
+io_vbus=59  on_vbus=1   off_vbus=0
+io_ir=6     on_ir=1     off_ir=0
+io_white=   on_white=1  off_white=0
+io_cutp=    on_cutp=    off_cutp=
+io_cutn=    on_cutn=    off_cutn=
+io_red=     on_red=1    off_red=0
+io_blue=    on_blue=1   off_blue=0
+io_reset=11 on_reset=1  off_reset=0
+io_audio=56 on_audio=1  off_audio=0
+
+#
+# /ipc/bin/GPIO exist on fulhan only
+# compilant jz duofang fulhan
+#
+fn_put()
+{
+    local PIN=${1}
+    [ -z "${PIN}" ] && { echo "Usage: fn_gpio PIN {on|off}"; return 1 ;}
+    [ -z "${GPIO}" ] && { test -f /ipc/bin/GPIO && GPIO=GPIO || GPIO=gpio ;}
+    [ ! -e "/sys/class/gpio/$GPIO$PIN" ] && echo $PIN > /sys/class/gpio/export
+    echo out > /sys/class/gpio/$GPIO$PIN/direction
+    echo ${2:-1} > /sys/class/gpio/$GPIO$PIN/value               # high active
+}
+
+#
+# above is different @different Product
+# Usage: 
+# . /ipc/bin/io.rc
+# fn_gpio sim1 on
+#
+
+fn_gpio()
+{
+    eval "_io=\$io_${1} _on=\$on_${1} _off=\$off_${1}"
+    [ -z "${_io}" ] &&  { echo -e "\n\tio_${1}  not define!\n"; return 1 ;}
+    [ -z "${_on}" ] &&  { echo -e "\n\ton_${1}  not define!\n"; return 1 ;}
+    [ -z "${_off}" ] && { echo -e "\n\toff_${1} not define!\n"; return 1 ;}
+
+    case $2 in
+     on) fn_put $_io $_on   ;;
+    off) fn_put $_io $_off  ;;
+  query) return 0           ;;
+      *) echo "err: ACTION $2 not define" ;;
+    esac
+}

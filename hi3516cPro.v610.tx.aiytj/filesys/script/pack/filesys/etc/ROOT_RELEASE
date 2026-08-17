@@ -1,0 +1,15 @@
+pakcmd C=ls R= ROOTFS=0 ALGO=1 HDFILTER=1 ZOOM=1 F4AE=0 ./zpack.sh w ty313 @2026-08-14.14:18:32
+Packer liwy
+Path: /opt/ipc/hi3568Pro/ty42/hi3516cPro.v610.tx.aiytj/filesys/script/pack
+Working Copy Root Path: /opt/ipc/hi3568Pro/ty42/hi3516cPro.v610.tx.aiytj
+URL: https://47.115.36.204/svn/hi3516cPro/hi3516cPro.v610.tx.aiytj/filesys/script/pack
+Relative URL: ^/hi3516cPro.v610.tx.aiytj/filesys/script/pack
+Repository Root: https://47.115.36.204/svn/hi3516cPro
+Repository UUID: 703263c8-eb24-486c-95a4-4e2a51750664
+Revision: 6481
+Node Kind: directory
+Schedule: normal
+Last Changed Author: xiangyp
+Last Changed Rev: 3616
+Last Changed Date: 2026-04-30 14:05:34 +0800 (Thu, 30 Apr 2026)
+

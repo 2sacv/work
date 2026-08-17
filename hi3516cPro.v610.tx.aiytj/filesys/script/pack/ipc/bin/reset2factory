@@ -1,0 +1,126 @@
+#! /bin/sh
+
+xt_ret() { [ "${1}" = "0" ] && return 0; echo "${2}"; return 1 ;}
+
+fn_heredoc()
+{
+	echo "$@" | sed 's/^[ \t]*//g' | sed '/^$/d'
+}
+
+fn_reset()
+{
+    set -x
+    cd /opt/conf
+
+    h=`cat /ipc/etc/maxheight`
+    org='/tmp/config.org'
+    pair='/tmp/pair'
+
+    # reset
+    test ! -e config.xml && cp /ipc/etc/config.org config.xml  # start from burn
+    xml_shuttle -c r -f factory.kep.list config.xml > $pair
+    cat ${net_pair} >> $pair
+
+    # reduce the frequence of customizing .tgz packet, so upgrade.mod.pair before custom files
+    # according to Last procedure is most important, so sd_custom ahead of custom_conf
+    custom_list="customcof.add.pair sd_custom.txt custom_conf"
+    for p in factory.kep.pair.${h:-1080}p upgrade.mod.pair ${custom_list}; do
+        test -f $p && cat $p >> $pair || echo ___ $p not exist ___
+    done
+    cp /ipc/etc/config.org $org
+    xml_shuttle -i -c w -f $pair $org
+    cp $org config.xml
+    cat $pair
+
+    # clean
+    sync; sleep .5; sync
+    rm -f config.org config.xml.prev config.prev.tgz feature.*
+    rm -f /opt/custom/cust_other.amr
+    rm -f /opt/etc/local.rc
+    rm -f /opt/conf/eth.pair
+    # avoid Ali DNS CDN stored, /opt/custom/linkkit_kv.bin aiot_kv.bin etc.
+    find  /opt/conf /opt/custom/ -type f -name '*kv.bin' | xargs rm -f
+    rm -f /opt/etc/local.rc
+    rm -f /opt/conf/4g/idVendor
+	rm -f /opt/aging_test.sh
+	rm -f /opt/keep_aging_test
+    touch reset_flag
+
+    # sync
+    sync; sleep 1; sync
+    set +x
+    echo "
+    +-----------------------------------------------------------+
+    |                                                           |
+    |              _RESET_ SUCCESSFUL, ENJOY IT!                |
+    |                                                           |
+    +-----------------------------------------------------------+
+    "
+    sync
+}
+
+fn_main()
+{
+    echo "reset2factory @`date`"
+    net_pair=/tmp/keep_net.pair
+    touch ${net_pair}
+
+    if [ "${1}" = keep_net ]; then
+        fn_heredoc "
+        1 /cfg/eth/nic
+        1 /cfg/eth/ip
+        1 /cfg/eth/mask
+        1 /cfg/eth/gw
+        1 /cfg/eth/mtu
+        1 /cfg/eth/dhcpen
+        1 /cfg/eth/reticle
+        1 /cfg/eth/ipadaen
+        1 /cfg/eth/dns
+        1 /cfg/wifi/nic
+        1 /cfg/wifi/ssid
+        1 /cfg/wifi/weppasswd
+        1 /cfg/wifi/token
+        1 /cfg/wifi/mode
+        1 /cfg/wifi/dhcp
+        1 /cfg/wifi/ip
+        1 /cfg/wifi/mask
+        1 /cfg/wifi/gw
+        1 /cfg/sim4g/card
+        1 /cfg/netport/httpPort
+        1 /cfg/authmode/mode
+        1 /cfg/sysUser/gnum
+        " > ${net_pair}.list
+
+        gnum=`xml_shuttle -cr -k /cfg/sysUser/gnum /opt/conf/config.xml | awk -F' ' '{print $3}'`
+        i=1
+        while [ $i -le $gnum ]; do
+            fn_heredoc "
+            $i /cfg/sysUser/userlist/user/group
+            $i /cfg/sysUser/userlist/user/username
+            $i /cfg/sysUser/userlist/user/cryptpasswd
+            $i /cfg/sysUser/userlist/user/digestpasswd
+            $i /cfg/sysUser/userlist/user/onvifpasswd"
+            i=$((i+1))
+        done >> ${net_pair}.list
+
+        xml_shuttle -c r -f ${net_pair}.list /opt/conf/config.xml > ${net_pair}
+    fi
+
+    fn_reset $@ || echo "
+    +-----------------------------------------------------------+
+    |                                                           |
+    |              _RESET_ __FAILURE__, CHECK IT.               |
+    |                                                           |
+    +-----------------------------------------------------------+
+    "
+}
+
+up_log='/opt/log/upgrade.log'
+fn_main $@ 2>&1 | tee -a ${up_log}
+bytes=`stat -c "%s" $up_log`
+K50=50000
+if [ "${bytes}" -gt $K50 ]; then
+    tail -c $K50 $up_log > /tmp/up_log
+    mv /tmp/up_log ${up_log} ; sync
+fi
+

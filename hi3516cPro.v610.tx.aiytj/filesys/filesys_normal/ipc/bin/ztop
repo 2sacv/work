@@ -1,0 +1,82 @@
+#! /bin/sh
+
+# [](http://www.blogjava.net/fjzag/articles/317773.html)
+# 
+
+fn_main()
+{
+    case $1 in
+    h|help)
+        echo "
+        Usage:  ztop            # jco_server
+                ztop j   [once] # jco_server
+                ztop APP [once] # other App
+        
+        ENV:
+                sec             # refresh intv, defautl 2
+        "
+        exit
+        ;;
+    j)
+        app=jco_server
+        ;;
+    *)  app=$1
+        ;;
+    esac
+
+    sec=${sec:=2}
+    app=${app:-jco_server}
+
+    pinfo="`ps | grep -m1 "\<$app\>" | awk '{print $1, $5}'`"
+
+    pid=`echo $pinfo| awk '{print $1}'`
+
+    if [ -z "${pid}" ]; then
+        echo "Usage: ztop appname"
+        exit
+    fi
+    #cat /proc/${pid}/task/836/stat | awk '{print $1, $3, $14, $15, $16, $17}'
+
+    fstat=/proc/${pid}/stat
+
+    # fstat=/proc/${pid}/task/${pid}/stat
+
+    cd /proc/${pid}/task
+
+    while : ; do
+        total_0=`head -1 /proc/stat | awk '{print ($2+$3+$4+$5+$6+$7+$8+$9+$10)}'`
+        for tid in *; do
+            fstat=/proc/${pid}/task/${tid}/stat
+            test -f $fstat || continue
+            eval cpu_0_${tid}=`cat  ${fstat} | awk '{print $14+$15+$16+$17}'`
+        done
+
+        sleep ${sec}
+
+        total_1=`head -1 /proc/stat | awk '{print ($2+$3+$4+$5+$6+$7+$8+$9+$10)}'`
+        for tid in *; do
+            fstat=/proc/${pid}/task/${tid}/stat
+            test -f $fstat || continue
+            cpu_mem=`cat  ${fstat} | awk '{print $14+$15+$16+$17}'`
+            eval cpu_1_${tid}=${cpu_mem}
+        done
+
+        echo "`ls | wc -l`  threads of ${pinfo}..."
+        printf "%-8s%-8s\n" tid %cpu 
+        for tid in *; do
+            test -f $tid/comm || continue
+            eval cpu_0="\$cpu_0_${tid}"
+            eval cpu_1="\$cpu_1_${tid}"
+            eval memory="\$memory${tid}"
+            cmd=`cat $tid/comm`
+            #       1        2          3         4         5     6
+            echo ${cpu_0} ${total_0} ${cpu_1} ${total_1} ${tid} $cmd |\
+                awk -v cmd="$cmd" '{printf "%-8d%2.1f  %s\n", $5, 100*($3-$1)/($4-$2), cmd}'
+        done | sort -g -k2 -r
+
+        [ "${2}" = once ] && exit
+    done
+}
+
+fn_main $@
+

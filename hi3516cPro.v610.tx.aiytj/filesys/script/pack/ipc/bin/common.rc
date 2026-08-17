@@ -1,0 +1,14 @@
+#! /bin/sh
+
+TEMP_RESOLV=/tmp/resolv.conf
+
+fn_insert2resolv()
+{
+    if [ ! -f "${1}" ]; then
+        logger "${1} not exist"; return 1
+    fi
+
+    touch /etc/resolv.conf
+    grep -v -f $1 /etc/resolv.conf > $TEMP_RESOLV.uniq
+    cat $1 $TEMP_RESOLV.uniq > /etc/resolv.conf
+}

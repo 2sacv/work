@@ -1,0 +1,41 @@
+#! /bin/sh
+
+fn_usage()
+{
+    echo -e "\nUsage:
+    gsys                 # list KEY help
+    gsys {l|list}        # list KEY value
+    gsys Mod             # Mod 状态反转
+    gsys Mod {on|off}    # turn on, turn off
+    "
+}
+
+fn_main()
+{
+    case $1 in
+    l|list)
+        ccli gsys -act list | grep '=' | sed 's/^/    /g'
+        return
+        ;;
+    '')
+        fn_usage
+        grep -A32 -i "struct Sys" /ipc/bin/.c/g_sys.h | grep -B32 -i "sSys;"
+        return
+        ;;
+    esac
+
+    case ${2:-tog} in
+     on) newv=1
+        ;;
+    off) newv=0
+        ;;
+    tog)
+        ccli gsys -act list | grep -q "${1}=0" && newv=1 || newv=0
+        ;;
+    esac
+
+    echo gsys set $1 ${newv:=1}
+    ccli gsys -act set -$1 ${newv}
+}
+
+fn_main $@

@@ -1,0 +1,124 @@
+#! /bin/sh
+
+fn_usage()
+{
+    echo -e "\nUsage:
+    $JCPCMD                     # help
+    $JCPCMD l|list              # list all Mod val
+    $JCPCMD h                   # show _c_ head file
+    $JCPCMD Mod                 # list one Mod bit and Help
+    $JCPCMD Mod {c|p0}          # clear all bit of Mod, or clean @prefix.rc
+    $JCPCMD Mod 0~19            # _do_ bit toggle
+    $JCPCMD Mod 0~19  {on|off}  # _do_ bit 1 or 0
+    $JCPCMD Mod 0~19  p1        # turn on @prefix.rc
+    $JCPCMD Mod 20~29 digit     # _do_ bit and set code=digit, use pop()
+    $JCPCMD Mod 30              # output contineous
+    $JCPCMD Mod 31              # output pop
+    "
+}
+
+fn_dec2bin()
+{
+    dec=${1:-0}
+    bin=""
+    pro=""
+
+    i=0
+    while [ ${i} -lt 32 ]; do
+        let ret=dec%2
+        bin="$ret${bin}"
+        pro="${i}${pro}"
+
+        if [ $i = 9 ]; then
+            bin=" ${bin}"
+            pro=" ${pro}"
+        fi
+
+        let dec=dec/2
+
+        if [ "${dec}" = 0 ] || [ "${dec}" = 1 ]; then
+            let i=i+1
+            let i=i%10
+            pro="${i}${pro}"
+            bin="$dec${bin}"
+            break
+        fi
+        let i=i+1
+        let i=i%10
+    done
+
+    echo $pro
+    echo $bin
+
+    return $?
+}
+
+fn_tog_key()
+{
+    cmd=$2
+    case ${3} in
+     c) cmd=c; newv=0 ;;
+    p0) cmd=c; newv=0 ; sed -i "/run_$1=/d" "/opt/etc/prefix.rc"; sync ;;
+     *) val=`echo ${3:-0} | awk '{val+=(2^$1)} END{ print val }'`; 
+    esac
+
+    case ${cmd} in
+    p1) newv=`awk -v oldv=$oldv -v val=$val 'BEGIN{ s=or(oldv,val);print s}'`
+        sed -i "/run_$1=/d" "/opt/etc/prefix.rc"
+        echo "export run_$1=${newv}" >> "/opt/etc/prefix.rc"; sync
+        ;;
+    on) newv=`awk -v oldv=$oldv -v val=$val 'BEGIN{ s=or(oldv,val);print s}'`
+        ;;
+   off) newv=`awk -v oldv=$oldv -v val=$val 'BEGIN{ if (and(oldv,val)) s=oldv-val; else s=oldv; print s}'`
+        ;;
+   tog) newv=`awk -v oldv=$oldv -v val=$val 'BEGIN{ if (and(oldv,val)) s=oldv-val; else s=oldv+val; print s}'`
+        ;;
+     c) echo "clear"
+        ;;
+     h) echo "Usage: $JCPCMD $Mod {0~31} [on|off|c|h|tog] # ARGV3 tog default"; exit
+        ;;
+[0-9]*) newv=`awk -v oldv=$oldv -v val=$val 'BEGIN{ s=or(oldv,val);print s}'`
+        code=$2
+        ;;
+    esac
+
+    ccli $JCPCMD -act set -$Mod ${newv} -code ${code:-0}
+}
+
+fn_main()
+{
+    Mod=$1
+    TAG=${JCPCMD:1}
+
+    case $1 in
+    l|list)
+        ccli ${JCPCMD} -act list | grep '=' | sed 's/^/    /g'
+        return
+        ;;
+    h)
+        cat /ipc/bin/.c/g_${TAG}.h
+        ;;
+    '')
+        fn_usage
+        grep -A32 -i "struct Mod" /ipc/bin/.c/g_sys.h | grep -B32 -i "sMod;"
+        return
+        ;;
+    esac
+
+    oldv=`ccli $JCPCMD -act list | grep "$Mod" | awk -F'=' '{print $2}'`
+
+    # list
+    if [ "${#}" -eq 1 ]; then
+        echo
+        grep -A32 -i "enum ${TAG}${Mod}" /ipc/bin/.c/g_${TAG}.h | grep -B32 -i "e${TAG}${Mod}"
+        echo
+        fn_dec2bin $oldv
+        return
+    fi
+
+    # set
+    fn_tog_key $Mod ${3:-tog} $2
+}
+
+JCPCMD=${JCPCMD:-grun}
+fn_main $@
